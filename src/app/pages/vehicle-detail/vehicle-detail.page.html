@@ -1,0 +1,177 @@
+<ion-header [translucent]="true" class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button text="Atrás" defaultHref="/garaje"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ vehicle()?.nickname }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button [routerLink]="['/vehiculo', vehicleId(), 'editar']" aria-label="Editar">
+        <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  @if (vehicle(); as v) {
+
+    <!-- Cabecera: la foto manda si la hay; si no, el color del vehículo. -->
+    <header class="hero" [style.--accent]="v.color || 'var(--ion-color-primary)'">
+      @if (v.photo) {
+        <img class="hero__photo" [src]="v.photo" [alt]="v.nickname" />
+        <div class="hero__scrim"></div>
+      } @else {
+        <div class="hero__glow"></div>
+      }
+
+      <div class="hero__body">
+        @if (!v.photo) {
+          <div class="hero__badge">
+            <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
+          </div>
+        }
+        <h1 class="hero__name">{{ v.nickname }}</h1>
+        <p class="hero__model">{{ v.make }} {{ v.model }} · {{ v.year }}</p>
+        @if (v.plate) {
+          <span class="plate">{{ v.plate }}</span>
+        }
+      </div>
+    </header>
+
+    <!-- Cifras de un vistazo. -->
+    <div class="stats">
+      <div class="stat">
+        <ion-icon name="speedometer-outline" aria-hidden="true"></ion-icon>
+        <span class="stat__value">{{ v.mileage | km }}</span>
+        <span class="stat__label">Kilometraje</span>
+      </div>
+      <div class="stat" [class.stat--alert]="overdue() > 0">
+        <ion-icon
+          [name]="overdue() ? 'alert-circle-outline' : 'checkmark-circle-outline'"
+          aria-hidden="true"
+        ></ion-icon>
+        <span class="stat__value">{{ overdue() || 'Al día' }}</span>
+        <span class="stat__label">{{ overdue() ? 'Vencidos' : 'Estado' }}</span>
+      </div>
+      <div class="stat">
+        <ion-icon name="cash-outline" aria-hidden="true"></ion-icon>
+        <span class="stat__value">{{ totalSpent() ? (totalSpent() + ' €') : '—' }}</span>
+        <span class="stat__label">Gastado</span>
+      </div>
+    </div>
+
+    <div class="body">
+      <ion-segment [value]="tab()" (ionChange)="tab.set($any($event.detail.value))">
+        <ion-segment-button value="plans">
+          <ion-label>Mantenimiento</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="history">
+          <ion-label>Historial</ion-label>
+        </ion-segment-button>
+      </ion-segment>
+
+      @if (tab() === 'plans') {
+        @if (plans().length) {
+          <ion-list class="panel" [inset]="true">
+            @for (status of plans(); track status.plan.id) {
+              <app-plan-status-card
+                [status]="status"
+                [editable]="true"
+                (complete)="completePlan($event)"
+                (edit)="openPlanForm($event.plan)"
+                (remove)="confirmDeletePlan($event)"
+              ></app-plan-status-card>
+            }
+          </ion-list>
+        } @else {
+          <div class="empty">
+            <ion-icon name="construct-outline"></ion-icon>
+            <h2>Sin mantenimientos configurados</h2>
+            <p>Añade las tareas que quieras seguir: aceite, frenos, ITV…</p>
+          </div>
+        }
+
+        <ion-button expand="block" fill="outline" class="add" (click)="openPlanForm()">
+          <ion-icon slot="start" name="add-outline"></ion-icon>
+          Añadir mantenimiento
+        </ion-button>
+      } @else {
+        @if (records().length) {
+          <ion-list class="panel" [inset]="true">
+            @for (record of records(); track record.id) {
+              <ion-item class="record" lines="full">
+                <ion-icon
+                  slot="start"
+                  [name]="record.category | categoryIcon"
+                  color="medium"
+                  aria-hidden="true"
+                ></ion-icon>
+                <ion-label>
+                  <h3>{{ record.title }}</h3>
+                  <p class="record__meta">
+                    {{ record.date | date: 'd MMM yyyy' }} ·
+                    {{ record.mileage | km }}
+                    @if (record.workshop) { · {{ record.workshop }} }
+                  </p>
+                </ion-label>
+                <div slot="end" class="record__right">
+                  @if (record.cost) {
+                    <ion-note class="record__cost">{{ record.cost }} €</ion-note>
+                  }
+                  <ion-button
+                    fill="clear"
+                    size="small"
+                    color="medium"
+                    (click)="deleteRecord(record.id)"
+                    [attr.aria-label]="'Borrar ' + record.title"
+                  >
+                    <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                  </ion-button>
+                </div>
+              </ion-item>
+            }
+          </ion-list>
+        } @else {
+          <div class="empty">
+            <ion-icon name="time-outline"></ion-icon>
+            <h2>Todavía sin historial</h2>
+            <p>Cuando registres un mantenimiento aparecerá aquí.</p>
+          </div>
+        }
+      }
+
+      @if (v.notes) {
+        <h3 class="group">Notas</h3>
+        <div class="notes">{{ v.notes }}</div>
+      }
+
+      <ion-button
+        expand="block"
+        fill="clear"
+        color="danger"
+        class="delete"
+        (click)="confirmDelete()"
+      >
+        <ion-icon slot="start" name="trash-outline"></ion-icon>
+        Borrar vehículo
+      </ion-button>
+    </div>
+    <ion-modal
+      [isOpen]="planModalOpen()"
+      (didDismiss)="closePlanForm()"
+    >
+      <ng-template>
+        <app-plan-form
+          [vehicle]="v"
+          [editing]="editingPlan()"
+          (planSaved)="savePlan($event)"
+          (dismissed)="closePlanForm()"
+        ></app-plan-form>
+      </ng-template>
+    </ion-modal>
+  } @else {
+    <div class="loading">
+      <ion-spinner></ion-spinner>
+    </div>
+  }
+</ion-content>

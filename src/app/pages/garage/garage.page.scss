@@ -1,0 +1,101 @@
+.centered {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: var(--ion-color-medium);
+}
+
+.section {
+  margin-bottom: 26px;
+}
+
+.section__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.section__title ion-icon {
+  font-size: 15px;
+}
+
+.section__list {
+  margin: 0;
+  border-radius: var(--app-radius);
+  overflow: hidden;
+}
+
+.state {
+  margin: 0 0 20px;
+  border-radius: var(--app-radius);
+  text-align: center;
+}
+
+.state ion-card-content {
+  padding: 22px;
+}
+
+.state ion-icon {
+  font-size: 34px;
+}
+
+.state h2 {
+  margin: 8px 0 4px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--ion-text-color);
+}
+
+.state p {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--ion-color-medium);
+}
+
+.state--warning {
+  background: rgba(var(--ion-color-warning-rgb), 0.12);
+  text-align: left;
+}
+
+.state--warning ion-card-content {
+  font-size: 0.85rem;
+  padding: 14px 18px;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 70px 24px;
+  text-align: center;
+}
+
+.empty ion-icon {
+  font-size: 56px;
+  color: var(--ion-color-medium);
+  opacity: 0.4;
+}
+
+.empty h2 {
+  margin: 10px 0 0;
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+.empty p {
+  margin: 0 0 18px;
+  color: var(--ion-color-medium);
+  max-width: 34ch;
+}
+
+/* Hueco para que el FAB no tape la última tarjeta. */
+.bottom-space {
+  height: 80px;
+}

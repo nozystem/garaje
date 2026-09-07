@@ -1,0 +1,246 @@
+/* --- Cabecera -------------------------------------------------------------- */
+
+.hero {
+  --accent: var(--ion-color-primary);
+
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 260px;
+  padding: 22px 24px 30px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.hero__photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Degradado sobre la foto para que el texto siempre se lea. */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(14, 14, 19, 0.25) 0%,
+    rgba(14, 14, 19, 0.75) 60%,
+    var(--ion-background-color) 100%
+  );
+}
+
+.hero__glow {
+  position: absolute;
+  top: -90px;
+  left: 50%;
+  width: 300px;
+  height: 300px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 28%, transparent) 0%,
+    transparent 68%
+  );
+}
+
+.hero__body {
+  position: relative;
+  width: 100%;
+}
+
+.hero__badge {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 12px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--ion-card-background));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  font-size: 38px;
+}
+
+.hero__name {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.hero__model {
+  margin: 2px 0 0;
+  font-size: 0.92rem;
+  color: var(--ion-color-step-800);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.plate {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 11px 3px 16px;
+  border: 2px solid var(--ion-color-step-400);
+  border-left: 6px solid #1c4bc4;
+  border-radius: 5px;
+  background: #f2f2f7;
+  color: #12121a;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* --- Cifras ---------------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px;
+  margin-top: -6px;
+}
+
+.stat {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  padding: 14px 6px 12px;
+  border-radius: var(--app-radius-sm);
+  background: var(--ion-card-background);
+  text-align: center;
+}
+
+.stat ion-icon {
+  font-size: 20px;
+  color: var(--ion-color-medium);
+}
+
+.stat--alert ion-icon {
+  color: var(--ion-color-danger);
+}
+
+.stat__value {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.stat--alert .stat__value {
+  color: var(--ion-color-danger);
+}
+
+.stat__label {
+  font-size: 0.7rem;
+  color: var(--ion-color-medium);
+}
+
+/* --- Cuerpo ---------------------------------------------------------------- */
+
+.body {
+  padding: 20px 16px 32px;
+}
+
+ion-segment {
+  margin-bottom: 16px;
+}
+
+.panel {
+  margin: 0;
+  border-radius: var(--app-radius);
+  overflow: hidden;
+}
+
+.group {
+  margin: 24px 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.notes {
+  padding: 16px 18px;
+  border-radius: var(--app-radius);
+  background: var(--ion-card-background);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* --- Historial ------------------------------------------------------------- */
+
+.record {
+  --padding-start: 14px;
+  --inner-padding-end: 6px;
+}
+
+.record__meta {
+  font-size: 0.8rem;
+  color: var(--ion-color-medium);
+}
+
+.record__right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.record__cost {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- Estados --------------------------------------------------------------- */
+
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 46px 24px;
+  text-align: center;
+}
+
+.empty ion-icon {
+  font-size: 46px;
+  color: var(--ion-color-medium);
+  opacity: 0.4;
+}
+
+.empty h2 {
+  margin: 10px 0 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.empty p {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 0.88rem;
+  color: var(--ion-color-medium);
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  padding: 90px 0;
+}
+
+.add {
+  --border-radius: 13px;
+  margin-top: 14px;
+}
+
+.delete {
+  margin-top: 26px;
+  font-size: 0.9rem;
+}

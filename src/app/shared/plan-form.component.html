@@ -1,0 +1,143 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="dismissed.emit()">Cancelar</ion-button>
+    </ion-buttons>
+    <ion-title>{{ editing() ? 'Editar tarea' : 'Nueva tarea' }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button strong="true" (click)="onSubmit()">Guardar</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding-horizontal">
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+
+    <!-- Los intervalos habituales, para no tener que saberse el libro. -->
+    @if (!editing()) {
+      <h3 class="group">Habituales para {{ vehicle().nickname }}</h3>
+      <div class="presets">
+        @for (preset of presets; track preset.title) {
+          <button
+            type="button"
+            class="preset"
+            [class.preset--active]="usedPreset() === preset.title"
+            (click)="applyPreset(preset)"
+          >
+            <ion-icon [name]="preset.category | categoryIcon" aria-hidden="true"></ion-icon>
+            <span class="preset__title">{{ preset.title }}</span>
+            <span class="preset__interval">
+              @if (preset.intervalKm) { {{ preset.intervalKm / 1000 }}.000 km }
+              @if (preset.intervalKm && preset.intervalMonths) { · }
+              @if (preset.intervalMonths) { {{ preset.intervalMonths }} meses }
+            </span>
+          </button>
+        }
+      </div>
+    }
+
+    <h3 class="group">Detalles</h3>
+    <div class="card">
+      <ion-item lines="none" class="field">
+        <ion-input
+          label="Nombre de la tarea"
+          labelPlacement="floating"
+          formControlName="title"
+          placeholder="Cambio de aceite"
+        ></ion-input>
+      </ion-item>
+      @if (invalid('title')) {
+        <p class="error">Ponle un nombre a la tarea</p>
+      }
+
+      <div class="divider"></div>
+
+      <ion-item lines="none" class="field">
+        <ion-select
+          label="Categoría"
+          labelPlacement="floating"
+          formControlName="category"
+          [interfaceOptions]="{ header: 'Categoría' }"
+        >
+          @for (category of categories; track category) {
+            <ion-select-option [value]="category">
+              {{ category | categoryLabel }}
+            </ion-select-option>
+          }
+          <ion-select-option value="other">Otros</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </div>
+
+    <h3 class="group">¿Cada cuánto?</h3>
+    <div class="card">
+      <ion-item lines="none" class="field">
+        <ion-input
+          label="Cada X kilómetros"
+          labelPlacement="floating"
+          type="number"
+          inputmode="numeric"
+          formControlName="intervalKm"
+          placeholder="15000"
+        ></ion-input>
+        <span slot="end" class="unit">km</span>
+      </ion-item>
+
+      <div class="divider"></div>
+
+      <ion-item lines="none" class="field">
+        <ion-input
+          label="Cada X meses"
+          labelPlacement="floating"
+          type="number"
+          inputmode="numeric"
+          formControlName="intervalMonths"
+          placeholder="12"
+        ></ion-input>
+        <span slot="end" class="unit">meses</span>
+      </ion-item>
+
+      @if (missingInterval && submitted()) {
+        <p class="error">Indica al menos uno de los dos intervalos</p>
+      } @else {
+        <p class="hint">
+          <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
+          Si pones los dos, vence el que se cumpla antes.
+        </p>
+      }
+    </div>
+
+    <h3 class="group">Última vez que se hizo</h3>
+    <div class="card">
+      <ion-item lines="none" class="field">
+        <ion-input
+          label="A qué kilometraje"
+          labelPlacement="floating"
+          type="number"
+          inputmode="numeric"
+          formControlName="lastServiceMileage"
+          [placeholder]="vehicle().mileage.toString()"
+        ></ion-input>
+        <span slot="end" class="unit">km</span>
+      </ion-item>
+
+      <div class="divider"></div>
+
+      <ion-item lines="none" class="field">
+        <ion-input
+          label="En qué fecha"
+          labelPlacement="floating"
+          type="date"
+          formControlName="lastServiceDate"
+        ></ion-input>
+      </ion-item>
+
+      <p class="hint">
+        <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
+        Si lo dejas en blanco, el contador empieza hoy.
+      </p>
+    </div>
+
+    <div class="bottom-space"></div>
+  </form>
+</ion-content>

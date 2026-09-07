@@ -1,0 +1,289 @@
+<ion-header [translucent]="true" class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button text="Atrás" defaultHref="/garaje"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ editingId() ? 'Editar' : 'Nuevo vehículo' }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+
+    <!-- Vista previa: refleja en vivo lo que se va escribiendo. -->
+    <div class="preview" [style.--accent]="form.value.color">
+      <div class="preview__glow"></div>
+
+      <!-- El propio distintivo es el selector de foto. -->
+      <button
+        type="button"
+        class="preview__badge"
+        [class.preview__badge--photo]="form.value.photo"
+        (click)="pickPhoto()"
+        [attr.aria-label]="form.value.photo ? 'Cambiar la foto' : 'Añadir una foto'"
+      >
+        @if (form.value.photo) {
+          <img [src]="form.value.photo" alt="" />
+          <span class="preview__edit">
+            <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+          </span>
+        } @else if (processingPhoto()) {
+          <ion-spinner name="crescent"></ion-spinner>
+        } @else {
+          <ion-icon [name]="typeIcon()" aria-hidden="true"></ion-icon>
+          <span class="preview__add">
+            <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+          </span>
+        }
+      </button>
+
+      @if (form.value.photo) {
+        <button type="button" class="preview__remove" (click)="removePhoto()">
+          Quitar foto
+        </button>
+      }
+
+      <input
+        #photoInput
+        type="file"
+        accept="image/*"
+        hidden
+        (change)="onPhotoSelected($event)"
+      />
+      <h2 class="preview__name">
+        {{ form.value.nickname || 'Tu vehículo' }}
+      </h2>
+      <p class="preview__model">
+        @if (form.value.make || form.value.model) {
+          {{ form.value.make }} {{ form.value.model }}
+        } @else {
+          Elige marca y modelo
+        }
+      </p>
+      @if (form.value.plate) {
+        <span class="plate">{{ form.value.plate }}</span>
+      }
+    </div>
+
+    <div class="body">
+
+      <!-- Tipo: tarjetas grandes en vez de un segmento pequeño. -->
+      <h3 class="group">¿Qué es?</h3>
+      <div class="types">
+        @for (option of typeOptions; track option.value) {
+          <button
+            type="button"
+            class="type"
+            [class.type--active]="selectedType() === option.value"
+            (click)="onTypeChange(option.value)"
+          >
+            <ion-icon [name]="option.icon" aria-hidden="true"></ion-icon>
+            <span>{{ option.label }}</span>
+          </button>
+        }
+      </div>
+
+      <h3 class="group">
+        Identificación
+        @if (catalog.loading()) {
+          <ion-spinner name="dots" class="group__spinner"></ion-spinner>
+        }
+      </h3>
+
+      <div class="card">
+        <ion-item lines="none" class="field">
+          <ion-input
+            label="Nombre"
+            labelPlacement="floating"
+            formControlName="nickname"
+            placeholder="El coche de diario"
+          ></ion-input>
+        </ion-item>
+        @if (invalid('nickname')) {
+          <p class="error">Ponle un nombre para reconocerlo</p>
+        }
+
+        <div class="divider"></div>
+
+        <!-- Marca y modelo vienen de /api/catalog, con texto libre de reserva. -->
+        <ion-item lines="none" class="field">
+          <ion-select
+            label="Marca"
+            labelPlacement="floating"
+            formControlName="make"
+            placeholder="Elige una marca"
+            (ionChange)="onMakeChange($any($event.detail.value))"
+            [interfaceOptions]="{ header: 'Marca' }"
+          >
+            @for (make of availableMakes(); track make.slug) {
+              <ion-select-option [value]="make.name">{{ make.name }}</ion-select-option>
+            }
+            <ion-select-option value="Otra">Otra…</ion-select-option>
+          </ion-select>
+        </ion-item>
+        @if (invalid('make')) {
+          <p class="error">Elige la marca</p>
+        }
+
+        @if (selectedMake() === 'Otra') {
+          <div class="divider"></div>
+          <ion-item lines="none" class="field">
+            <ion-input
+              label="¿Qué marca?"
+              labelPlacement="floating"
+              formControlName="make"
+            ></ion-input>
+          </ion-item>
+        }
+
+        <div class="divider"></div>
+
+        @if (availableModels().length) {
+          <ion-item lines="none" class="field">
+            <ion-select
+              label="Modelo"
+              labelPlacement="floating"
+              formControlName="model"
+              placeholder="Elige un modelo"
+              [interfaceOptions]="{ header: 'Modelo' }"
+            >
+              @for (model of availableModels(); track model) {
+                <ion-select-option [value]="model">{{ model }}</ion-select-option>
+              }
+              <ion-select-option value="Otro">Otro…</ion-select-option>
+            </ion-select>
+          </ion-item>
+        } @else {
+          <ion-item lines="none" class="field">
+            <ion-input
+              label="Modelo"
+              labelPlacement="floating"
+              formControlName="model"
+              placeholder="Escríbelo"
+            ></ion-input>
+          </ion-item>
+        }
+        @if (invalid('model')) {
+          <p class="error">Indica el modelo</p>
+        }
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <ion-item lines="none" class="field field--half">
+            <ion-input
+              label="Año"
+              labelPlacement="floating"
+              type="number"
+              inputmode="numeric"
+              formControlName="year"
+            ></ion-input>
+          </ion-item>
+          <div class="row__sep"></div>
+          <ion-item lines="none" class="field field--half">
+            <ion-input
+              label="Matrícula"
+              labelPlacement="floating"
+              formControlName="plate"
+              class="uppercase"
+            ></ion-input>
+          </ion-item>
+        </div>
+      </div>
+
+      <!-- Combustible: iconos, no un desplegable. -->
+      <h3 class="group">Combustible</h3>
+      <div class="fuels">
+        @for (fuel of fuelOptions; track fuel.value) {
+          <button
+            type="button"
+            class="fuel"
+            [class.fuel--active]="form.value.fuel === fuel.value"
+            (click)="form.patchValue({ fuel: fuel.value })"
+          >
+            <ion-icon [name]="fuel.icon" aria-hidden="true"></ion-icon>
+            <span>{{ fuel.label }}</span>
+          </button>
+        }
+      </div>
+
+      <h3 class="group">Kilometraje</h3>
+      <div class="card">
+        <ion-item lines="none" class="field">
+          <ion-input
+            label="Kilómetros actuales"
+            labelPlacement="floating"
+            type="number"
+            inputmode="numeric"
+            formControlName="mileage"
+          ></ion-input>
+          <span slot="end" class="unit">km</span>
+        </ion-item>
+        @if (invalid('mileage')) {
+          <p class="error">Indica el kilometraje</p>
+        }
+
+        <div class="divider"></div>
+
+        <ion-item lines="none" class="field">
+          <ion-input
+            label="Kilómetros al mes"
+            labelPlacement="floating"
+            type="number"
+            inputmode="numeric"
+            formControlName="monthlyMileage"
+          ></ion-input>
+          <span slot="end" class="unit">km/mes</span>
+        </ion-item>
+        <p class="hint">
+          <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
+          Con esto se calcula cuándo vencerá cada mantenimiento.
+        </p>
+      </div>
+
+      <h3 class="group">Color</h3>
+      <div class="colors">
+        @for (color of colors; track color) {
+          <button
+            type="button"
+            class="colors__dot"
+            [class.colors__dot--active]="form.value.color === color"
+            [style.background]="color"
+            (click)="form.patchValue({ color })"
+            [attr.aria-label]="'Color ' + color"
+          >
+            @if (form.value.color === color) {
+              <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
+            }
+          </button>
+        }
+      </div>
+
+      <h3 class="group">Notas</h3>
+      <div class="card">
+        <ion-item lines="none" class="field">
+          <ion-textarea
+            formControlName="notes"
+            placeholder="Lo que quieras recordar de este vehículo"
+            [autoGrow]="true"
+            rows="3"
+          ></ion-textarea>
+        </ion-item>
+      </div>
+
+      <ion-button
+        expand="block"
+        type="submit"
+        class="submit"
+        [disabled]="saving()"
+      >
+        @if (saving()) {
+          <ion-spinner name="crescent"></ion-spinner>
+        } @else {
+          <ion-icon slot="start" [name]="editingId() ? 'save-outline' : 'add-outline'"></ion-icon>
+          {{ editingId() ? 'Guardar cambios' : 'Añadir al garaje' }}
+        }
+      </ion-button>
+    </div>
+  </form>
+</ion-content>

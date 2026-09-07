@@ -1,0 +1,57 @@
+<ion-item-sliding [disabled]="!editable()">
+  <ion-item class="plan" [class.plan--overdue]="status().status === 'overdue'" lines="full">
+    <ion-icon
+      slot="start"
+      [name]="status().plan.category | categoryIcon"
+      [color]="status().status | statusColor"
+      aria-hidden="true"
+    ></ion-icon>
+
+    <ion-label>
+      <h3>{{ status().plan.title }}</h3>
+
+      <p class="plan__meta">
+        @if (showVehicle() && vehicleName()) {
+          <span class="plan__vehicle">{{ vehicleName() }}</span> ·
+        }
+        {{ status().plan.category | categoryLabel }}
+      </p>
+
+      <ion-progress-bar
+        [value]="progressValue"
+        [color]="status().status | statusColor"
+      ></ion-progress-bar>
+
+      <p class="plan__remaining">
+        {{ remainingText }}
+        @if (status().estimatedDueDate && status().status !== 'overdue') {
+          <ion-note> · aprox. {{ status().estimatedDueDate | date: 'MMM yyyy' }}</ion-note>
+        }
+      </p>
+    </ion-label>
+
+    <div class="plan__actions" slot="end">
+      <ion-badge [color]="status().status | statusColor">
+        {{ status().status | statusLabel }}
+      </ion-badge>
+
+      <ion-button
+        size="small"
+        fill="clear"
+        (click)="complete.emit(status())"
+        [attr.aria-label]="'Registrar ' + status().plan.title + ' como hecho'"
+      >
+        Hecho
+      </ion-button>
+    </div>
+  </ion-item>
+
+  <ion-item-options side="end">
+    <ion-item-option color="medium" (click)="edit.emit(status())">
+      <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+    </ion-item-option>
+    <ion-item-option color="danger" (click)="remove.emit(status())">
+      <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+    </ion-item-option>
+  </ion-item-options>
+</ion-item-sliding>

@@ -1,0 +1,22 @@
+# Compilado
+/www
+/dist
+/.angular
+
+# Dependencias
+/node_modules
+npm-debug.log
+
+# Vercel
+.vercel
+
+# Entorno
+.env
+.env.local
+
+# Editores
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

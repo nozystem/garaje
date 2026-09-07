@@ -1,0 +1,33 @@
+<ion-card
+  class="vehicle"
+  button
+  (click)="open.emit(vehicle().id)"
+  [style.--accent]="vehicle().color || 'var(--ion-color-primary)'"
+>
+  <ion-card-content class="vehicle__content">
+    <div class="vehicle__icon">
+      <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
+    </div>
+
+    <div class="vehicle__info">
+      <h2 class="vehicle__name">{{ vehicle().nickname }}</h2>
+      <p class="vehicle__model">
+        {{ vehicle().make }} {{ vehicle().model }} · {{ vehicle().year }}
+      </p>
+      <ion-note class="vehicle__km">
+        {{ vehicle().mileage | km }} · {{ fuelLabel }}
+      </ion-note>
+    </div>
+
+    <div class="vehicle__status">
+      @if (overdue > 0) {
+        <ion-badge color="danger">{{ overdue }} vencido{{ overdue === 1 ? '' : 's' }}</ion-badge>
+      } @else if (dueSoon > 0) {
+        <ion-badge color="warning">{{ dueSoon }} pendiente{{ dueSoon === 1 ? '' : 's' }}</ion-badge>
+      } @else {
+        <ion-badge color="success">Al día</ion-badge>
+      }
+      <ion-icon name="chevron-forward-outline" class="vehicle__chevron" aria-hidden="true"></ion-icon>
+    </div>
+  </ion-card-content>
+</ion-card>

@@ -1,0 +1,83 @@
+/**
+ * Tema de la aplicación.
+ *
+ * Paleta oscura con un ámbar como color principal: evoca el salpicadero de un
+ * coche, se distingue del azul por defecto de Ionic y contrasta bien con los
+ * rojos y verdes que usa la app para el estado de los mantenimientos.
+ */
+
+:root {
+  /* Ámbar principal */
+  --ion-color-primary: #f5a623;
+  --ion-color-primary-rgb: 245, 166, 35;
+  --ion-color-primary-contrast: #1a1408;
+  --ion-color-primary-contrast-rgb: 26, 20, 8;
+  --ion-color-primary-shade: #d8921f;
+  --ion-color-primary-tint: #f6af39;
+
+  --ion-color-secondary: #4d9de0;
+  --ion-color-secondary-rgb: 77, 157, 224;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #448ac5;
+  --ion-color-secondary-tint: #5fa7e3;
+
+  --ion-color-success: #2ec27e;
+  --ion-color-success-rgb: 46, 194, 126;
+  --ion-color-success-contrast: #04150c;
+  --ion-color-success-contrast-rgb: 4, 21, 12;
+  --ion-color-success-shade: #28ab6f;
+  --ion-color-success-tint: #43c88b;
+
+  --ion-color-warning: #ffb627;
+  --ion-color-warning-rgb: 255, 182, 39;
+  --ion-color-warning-contrast: #1a1408;
+  --ion-color-warning-contrast-rgb: 26, 20, 8;
+  --ion-color-warning-shade: #e0a022;
+  --ion-color-warning-tint: #ffbd3d;
+
+  --ion-color-danger: #f04a5c;
+  --ion-color-danger-rgb: 240, 74, 92;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #d34151;
+  --ion-color-danger-tint: #f25c6c;
+
+  --ion-color-medium: #8b8b9a;
+  --ion-color-medium-rgb: 139, 139, 154;
+  --ion-color-medium-contrast: #ffffff;
+  --ion-color-medium-shade: #7a7a88;
+  --ion-color-medium-tint: #9797a4;
+
+  /* Radios y sombras propios, más generosos que los de Ionic. */
+  --app-radius: 18px;
+  --app-radius-sm: 12px;
+  --app-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* La app se diseña en oscuro; el claro se deja como cortesía del sistema. */
+:root {
+  --ion-background-color: #0e0e13;
+  --ion-background-color-rgb: 14, 14, 19;
+  --ion-text-color: #f2f2f7;
+  --ion-text-color-rgb: 242, 242, 247;
+
+  --ion-card-background: #191922;
+  --ion-item-background: #191922;
+  --ion-toolbar-background: #12121a;
+  --ion-tab-bar-background: #12121a;
+
+  --ion-color-step-50: #1a1a23;
+  --ion-color-step-100: #21212b;
+  --ion-color-step-150: #282833;
+  --ion-color-step-200: #2f2f3b;
+  --ion-color-step-250: #363643;
+  --ion-color-step-300: #3d3d4b;
+  --ion-color-step-350: #444453;
+  --ion-color-step-400: #4b4b5b;
+  --ion-color-step-500: #5a5a6b;
+  --ion-color-step-600: #74748a;
+  --ion-color-step-700: #9494a8;
+  --ion-color-step-800: #b4b4c4;
+  --ion-color-step-900: #d4d4e0;
+}

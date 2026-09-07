@@ -1,0 +1,110 @@
+/* Dentro de un ion-modal, el componente anfitrión debe ocupar todo el alto o
+   su ion-content se queda sin espacio y no muestra nada. */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.group {
+  margin: 22px 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.card {
+  border-radius: var(--app-radius);
+  background: var(--ion-card-background);
+  overflow: hidden;
+}
+
+.field {
+  --background: transparent;
+  --padding-start: 18px;
+  --inner-padding-end: 18px;
+  --min-height: 60px;
+}
+
+.divider {
+  height: 1px;
+  margin-left: 18px;
+  background: var(--ion-color-step-150);
+}
+
+.unit {
+  font-size: 0.82rem;
+  color: var(--ion-color-medium);
+}
+
+.error {
+  margin: 0;
+  padding: 4px 18px 10px;
+  font-size: 0.78rem;
+  color: var(--ion-color-danger);
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 18px 14px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ion-color-medium);
+}
+
+.hint ion-icon {
+  flex: none;
+  margin-top: 1px;
+  font-size: 14px;
+}
+
+/* --- Intervalos habituales -------------------------------------------------- */
+
+.presets {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.preset {
+  display: grid;
+  gap: 2px;
+  padding: 13px 12px;
+  border: 1.5px solid var(--ion-color-step-150);
+  border-radius: var(--app-radius-sm);
+  background: var(--ion-card-background);
+  color: var(--ion-text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.preset ion-icon {
+  font-size: 19px;
+  color: var(--ion-color-primary);
+}
+
+.preset--active {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.1);
+}
+
+.preset__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.preset__interval {
+  font-size: 0.72rem;
+  color: var(--ion-color-medium);
+}
+
+.bottom-space {
+  height: 30px;
+}

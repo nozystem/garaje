@@ -1,0 +1,35 @@
+.plan {
+  --padding-start: 12px;
+  --inner-padding-end: 8px;
+}
+
+.plan--overdue {
+  --background: rgba(var(--ion-color-danger-rgb), 0.06);
+}
+
+.plan__meta {
+  font-size: 0.8rem;
+  color: var(--ion-color-medium);
+  margin-bottom: 6px;
+}
+
+.plan__vehicle {
+  font-weight: 600;
+}
+
+ion-progress-bar {
+  height: 5px;
+  border-radius: 3px;
+  margin-bottom: 5px;
+}
+
+.plan__remaining {
+  font-size: 0.82rem;
+}
+
+.plan__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
