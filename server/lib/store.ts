@@ -19,14 +19,29 @@ export function isPersistent(): boolean {
   return Boolean(process.env['POSTGRES_URL']);
 }
 
+/**
+ * Decide si la conexión debe ir cifrada.
+ *
+ * Los proveedores en la nube exigen SSL, pero un Postgres local no lo soporta
+ * y la conexión falla con "The server does not support SSL connections". Se
+ * decide por el destino en vez de forzarlo siempre.
+ */
+export function sslFor(url: string): false | { rejectUnauthorized: boolean } {
+  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//.test(url);
+  const wantsNoSsl = /[?&]sslmode=disable/.test(url);
+  return isLocal || wantsNoSsl ? false : { rejectUnauthorized: false };
+}
+
 async function getPool(): Promise<import('pg').Pool | null> {
   if (!isPersistent()) return null;
 
   if (!pool) {
     const { Pool } = await import('pg');
+    const url = process.env['POSTGRES_URL'] as string;
+
     pool = new Pool({
-      connectionString: process.env['POSTGRES_URL'],
-      ssl: { rejectUnauthorized: false },
+      connectionString: url,
+      ssl: sslFor(url),
       max: 1, // Serverless: una conexión por instancia; el pooler hace el resto.
     });
   }
