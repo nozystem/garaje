@@ -854,7 +854,12 @@ async function handler(req, res) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
     }
-    res.end(JSON.stringify({ error: "Internal server error" }));
+    res.end(
+      JSON.stringify({
+        error: "Internal server error",
+        detail: error instanceof Error ? error.message : String(error)
+      })
+    );
   }
 }
 export {
