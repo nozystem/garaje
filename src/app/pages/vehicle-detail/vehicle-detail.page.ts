@@ -98,6 +98,13 @@ export class VehicleDetailPage implements OnInit {
 
     if (!this.vehicle()) {
       void this.router.navigate(['/garage']);
+      return;
+    }
+
+    const planId = this.route.snapshot.queryParamMap.get('complete');
+    if (planId) {
+      const status = this.plans().find((p) => p.plan.id === planId);
+      if (status) await this.completePlan(status);
     }
   }
 

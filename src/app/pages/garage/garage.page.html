@@ -43,7 +43,7 @@
         <ion-icon name="car-outline"></ion-icon>
         <h2>Your garage is empty</h2>
         <p>Add your first vehicle to start tracking its maintenance.</p>
-        <ion-button routerLink="/vehicle/nuevo">
+        <ion-button routerLink="/vehicle/new">
           <ion-icon slot="start" name="add-outline"></ion-icon>
           Add vehicle
         </ion-button>
@@ -98,7 +98,7 @@
 
 @if (hasVehicles()) {
   <ion-fab slot="fixed" vertical="bottom" horizontal="end">
-    <ion-fab-button routerLink="/vehicle/nuevo" aria-label="Add vehicle">
+    <ion-fab-button routerLink="/vehicle/new" aria-label="Add vehicle">
       <ion-icon name="add-outline"></ion-icon>
     </ion-fab-button>
   </ion-fab>

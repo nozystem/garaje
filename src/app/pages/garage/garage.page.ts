@@ -100,12 +100,12 @@ export class GaragePage implements OnInit {
   }
 
   openVehicle(id: string): void {
-    void this.router.navigate(['/vehiculo', id]);
+    void this.router.navigate(['/vehicle', id]);
   }
 
   completePlan(vehicleId: string, planId: string): void {
-    void this.router.navigate(['/vehiculo', vehicleId], {
-      queryParams: { completar: planId },
+    void this.router.navigate(['/vehicle', vehicleId], {
+      queryParams: { complete: planId },
     });
   }
 }
