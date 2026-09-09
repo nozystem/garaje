@@ -1,0 +1,104 @@
+<ion-content [fullscreen]="true">
+  <div class="auth">
+    <div class="auth__glow"></div>
+
+    <header class="brand">
+      <div class="brand__badge">
+        <ion-icon name="car-sport-outline" aria-hidden="true"></ion-icon>
+      </div>
+      <h1 class="brand__title">Garaje</h1>
+      <p class="brand__claim">
+        Lleva el mantenimiento de tus vehículos desde cualquier dispositivo.
+      </p>
+    </header>
+
+    <div class="tabs" role="tablist">
+      <button
+        type="button"
+        class="tabs__btn"
+        [class.tabs__btn--active]="!isRegister()"
+        (click)="switchTo('login')"
+      >
+        Entrar
+      </button>
+      <button
+        type="button"
+        class="tabs__btn"
+        [class.tabs__btn--active]="isRegister()"
+        (click)="switchTo('register')"
+      >
+        Crear cuenta
+      </button>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="card">
+      @if (isRegister()) {
+        <ion-item lines="none" class="field">
+          <ion-icon slot="start" name="person-outline" aria-hidden="true"></ion-icon>
+          <ion-input
+            label="Nombre"
+            labelPlacement="floating"
+            formControlName="name"
+            autocomplete="name"
+            placeholder="Cómo te llamas"
+          ></ion-input>
+        </ion-item>
+        @if (invalid('name')) {
+          <p class="error">Escribe tu nombre</p>
+        }
+        <div class="divider"></div>
+      }
+
+      <ion-item lines="none" class="field">
+        <ion-icon slot="start" name="mail-outline" aria-hidden="true"></ion-icon>
+        <ion-input
+          label="Correo"
+          labelPlacement="floating"
+          type="email"
+          inputmode="email"
+          formControlName="email"
+          autocomplete="email"
+          placeholder="tu@correo.com"
+        ></ion-input>
+      </ion-item>
+      @if (invalid('email')) {
+        <p class="error">Necesito un correo válido</p>
+      }
+
+      <div class="divider"></div>
+
+      <ion-item lines="none" class="field">
+        <ion-icon slot="start" name="lock-closed-outline" aria-hidden="true"></ion-icon>
+        <ion-input
+          label="Contraseña"
+          labelPlacement="floating"
+          type="password"
+          formControlName="password"
+          [autocomplete]="isRegister() ? 'new-password' : 'current-password'"
+          placeholder="Mínimo 8 caracteres"
+        ></ion-input>
+      </ion-item>
+      @if (invalid('password')) {
+        <p class="error">La contraseña debe tener al menos 8 caracteres</p>
+      }
+
+      <ion-button
+        expand="block"
+        type="submit"
+        class="submit"
+        [disabled]="busy()"
+      >
+        @if (busy()) {
+          <ion-spinner name="crescent"></ion-spinner>
+        } @else {
+          {{ isRegister() ? 'Crear mi garaje' : 'Entrar' }}
+        }
+      </ion-button>
+    </form>
+
+    <p class="note">
+      Tus datos quedan asociados a tu cuenta y los tienes disponibles en
+      cualquier dispositivo.
+    </p>
+  </div>
+</ion-content>

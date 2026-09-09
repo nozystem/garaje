@@ -1,3 +1,20 @@
+export interface StoredUser {
+  id: string;
+  email: string;
+  /** Hash de la contraseña. Nunca sale de la API. */
+  passwordHash: string;
+  name: string;
+  createdAt: string;
+}
+
+/** Lo que sí puede ver el cliente. */
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
 /**
  * Contrato entre la API y el cliente.
  *
@@ -7,7 +24,7 @@
 
 export interface StoredVehicle {
   id: string;
-  ownerId: string;
+  userId: string;
   nickname: string;
   make: string;
   model: string;
@@ -26,7 +43,7 @@ export interface StoredVehicle {
 
 export interface StoredRecord {
   id: string;
-  ownerId: string;
+  userId: string;
   vehicleId: string;
   category: string;
   title: string;
@@ -41,7 +58,7 @@ export interface StoredRecord {
 
 export interface StoredPlan {
   id: string;
-  ownerId: string;
+  userId: string;
   vehicleId: string;
   category: string;
   title: string;

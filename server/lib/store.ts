@@ -1,23 +1,21 @@
-import type { GarageSnapshot, StoredPlan, StoredRecord, StoredVehicle } from './types.ts';
+import type {
+  GarageSnapshot,
+  StoredPlan,
+  StoredRecord,
+  StoredUser,
+  StoredVehicle,
+} from './types.ts';
 
 /**
- * Almacenamiento del garaje.
+ * Acceso a la base de datos.
  *
- * Usa Postgres cuando hay `POSTGRES_URL`, y memoria cuando no la hay. Lo
- * segundo no es un descuido: permite clonar el repo y levantar la API sin
- * montar una base de datos, que es lo que hace falta para que alguien pruebe
- * el proyecto en dos minutos. En producción la variable es obligatoria y la
- * app lo indica en la interfaz.
+ * Desde que la app tiene cuentas, PostgreSQL es obligatorio: los usuarios
+ * deben persistir entre reinicios y ser los mismos desde cualquier
+ * dispositivo. El modo en memoria de la versión anterior ya no tiene sentido.
  */
-
-const memory: GarageSnapshot = { vehicles: [], records: [], plans: [] };
 
 let pool: import('pg').Pool | null = null;
 let schemaReady = false;
-
-export function isPersistent(): boolean {
-  return Boolean(process.env['POSTGRES_URL']);
-}
 
 /**
  * Decide si la conexión debe ir cifrada.
@@ -32,13 +30,17 @@ export function sslFor(url: string): false | { rejectUnauthorized: boolean } {
   return isLocal || wantsNoSsl ? false : { rejectUnauthorized: false };
 }
 
-async function getPool(): Promise<import('pg').Pool | null> {
-  if (!isPersistent()) return null;
+export async function getPool(): Promise<import('pg').Pool> {
+  const url = process.env['POSTGRES_URL'];
+
+  if (!url) {
+    throw new Error(
+      'Falta POSTGRES_URL. La aplicación necesita una base de datos para las cuentas.'
+    );
+  }
 
   if (!pool) {
     const { Pool } = await import('pg');
-    const url = process.env['POSTGRES_URL'] as string;
-
     pool = new Pool({
       connectionString: url,
       ssl: sslFor(url),
@@ -53,48 +55,118 @@ async function getPool(): Promise<import('pg').Pool | null> {
   return pool;
 }
 
+/**
+ * Crea el esquema si no existe.
+ *
+ * Las claves foráneas con ON DELETE CASCADE hacen que borrar una cuenta o un
+ * vehículo se lleve por delante lo que cuelga de él, sin depender de que la
+ * aplicación se acuerde de hacerlo.
+ */
 async function ensureSchema(p: import('pg').Pool): Promise<void> {
   await p.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- El email identifica la cuenta: se compara siempre en minúsculas, así
+    -- que el índice único va sobre su versión normalizada.
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
+
     CREATE TABLE IF NOT EXISTS vehicles (
       id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
       data JSONB NOT NULL
     );
+
     CREATE TABLE IF NOT EXISTS records (
       id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      vehicle_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
       data JSONB NOT NULL
     );
+
     CREATE TABLE IF NOT EXISTS plans (
       id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      vehicle_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
       data JSONB NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS vehicles_owner ON vehicles (owner_id);
-    CREATE INDEX IF NOT EXISTS records_owner ON records (owner_id);
-    CREATE INDEX IF NOT EXISTS plans_owner ON plans (owner_id);
+
+    CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
+    CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
+    CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
   `);
+}
+
+/* --- Usuarios -------------------------------------------------------------- */
+
+export async function createUser(user: StoredUser): Promise<void> {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, $3, $4)`,
+    [user.id, user.email, user.passwordHash, user.name]
+  );
+}
+
+export async function findUserByEmail(email: string): Promise<StoredUser | null> {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT id, email, password_hash, name, created_at
+     FROM users WHERE lower(email) = lower($1)`,
+    [email]
+  );
+  return result.rows[0] ? toUser(result.rows[0]) : null;
+}
+
+export async function findUserById(id: string): Promise<StoredUser | null> {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0] ? toUser(result.rows[0]) : null;
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  const p = await getPool();
+  // Las claves foráneas se llevan vehículos, planes y registros.
+  await p.query('DELETE FROM users WHERE id = $1', [id]);
+}
+
+function toUser(row: Record<string, unknown>): StoredUser {
+  return {
+    id: row['id'] as string,
+    email: row['email'] as string,
+    passwordHash: row['password_hash'] as string,
+    name: row['name'] as string,
+    createdAt: (row['created_at'] as Date).toISOString(),
+  };
+}
+
+/* --- Garaje ---------------------------------------------------------------- */
+
+/** Cierra el pool. Solo lo necesitan los tests al terminar. */
+export async function closePool(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    schemaReady = false;
+  }
 }
 
 export type Table = 'vehicles' | 'records' | 'plans';
 
-export async function loadSnapshot(ownerId: string): Promise<GarageSnapshot> {
+export async function loadSnapshot(userId: string): Promise<GarageSnapshot> {
   const p = await getPool();
 
-  if (!p) {
-    return {
-      vehicles: memory.vehicles.filter((v) => v.ownerId === ownerId),
-      records: memory.records.filter((r) => r.ownerId === ownerId),
-      plans: memory.plans.filter((pl) => pl.ownerId === ownerId),
-    };
-  }
-
   const [vehicles, records, plans] = await Promise.all([
-    p.query('SELECT data FROM vehicles WHERE owner_id = $1', [ownerId]),
-    p.query('SELECT data FROM records WHERE owner_id = $1', [ownerId]),
-    p.query('SELECT data FROM plans WHERE owner_id = $1', [ownerId]),
+    p.query('SELECT data FROM vehicles WHERE user_id = $1', [userId]),
+    p.query('SELECT data FROM records WHERE user_id = $1', [userId]),
+    p.query('SELECT data FROM plans WHERE user_id = $1', [userId]),
   ]);
 
   return {
@@ -104,108 +176,61 @@ export async function loadSnapshot(ownerId: string): Promise<GarageSnapshot> {
   };
 }
 
-export async function findById<T extends { id: string; ownerId: string }>(
+export async function findById<T>(
   table: Table,
-  ownerId: string,
+  userId: string,
   id: string
 ): Promise<T | null> {
   const p = await getPool();
-
-  if (!p) {
-    const list = memory[table] as unknown as T[];
-    return list.find((i) => i.id === id && i.ownerId === ownerId) ?? null;
-  }
-
   const result = await p.query(
-    `SELECT data FROM ${table} WHERE id = $1 AND owner_id = $2`,
-    [id, ownerId]
+    `SELECT data FROM ${table} WHERE id = $1 AND user_id = $2`,
+    [id, userId]
   );
   return (result.rows[0]?.['data'] as T) ?? null;
 }
 
 export async function upsert(
   table: Table,
-  ownerId: string,
+  userId: string,
   id: string,
-  data: { id: string; ownerId: string },
+  data: unknown,
   vehicleId?: string
 ): Promise<void> {
   const p = await getPool();
 
-  if (!p) {
-    const list = memory[table] as unknown as { id: string }[];
-    const index = list.findIndex((item) => item.id === id);
-    if (index >= 0) {
-      list[index] = data;
-    } else {
-      list.push(data);
-    }
-    return;
-  }
-
   if (table === 'vehicles') {
     await p.query(
-      `INSERT INTO vehicles (id, owner_id, data) VALUES ($1, $2, $3)
+      `INSERT INTO vehicles (id, user_id, data) VALUES ($1, $2, $3)
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-      [id, ownerId, JSON.stringify(data)]
+      [id, userId, JSON.stringify(data)]
     );
     return;
   }
 
   await p.query(
-    `INSERT INTO ${table} (id, owner_id, vehicle_id, data) VALUES ($1, $2, $3, $4)
+    `INSERT INTO ${table} (id, user_id, vehicle_id, data) VALUES ($1, $2, $3, $4)
      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
-    [id, ownerId, vehicleId, JSON.stringify(data)]
+    [id, userId, vehicleId, JSON.stringify(data)]
   );
 }
 
 export async function remove(
   table: Table,
-  ownerId: string,
+  userId: string,
   id: string
 ): Promise<boolean> {
   const p = await getPool();
-
-  if (!p) {
-    const list = memory[table] as unknown as { id: string; ownerId: string }[];
-    const index = list.findIndex((i) => i.id === id && i.ownerId === ownerId);
-    if (index < 0) return false;
-    list.splice(index, 1);
-    return true;
-  }
-
   const result = await p.query(
-    `DELETE FROM ${table} WHERE id = $1 AND owner_id = $2`,
-    [id, ownerId]
+    `DELETE FROM ${table} WHERE id = $1 AND user_id = $2`,
+    [id, userId]
   );
   return (result.rowCount ?? 0) > 0;
 }
 
-/** Borrar un vehículo se lleva por delante su historial y sus planes. */
+/** Borrar el vehículo arrastra su historial y sus planes por clave foránea. */
 export async function removeVehicleCascade(
-  ownerId: string,
+  userId: string,
   vehicleId: string
 ): Promise<boolean> {
-  const p = await getPool();
-
-  if (!p) {
-    memory.records = memory.records.filter(
-      (r) => !(r.vehicleId === vehicleId && r.ownerId === ownerId)
-    );
-    memory.plans = memory.plans.filter(
-      (pl) => !(pl.vehicleId === vehicleId && pl.ownerId === ownerId)
-    );
-    return remove('vehicles', ownerId, vehicleId);
-  }
-
-  await p.query('DELETE FROM records WHERE vehicle_id = $1 AND owner_id = $2', [vehicleId, ownerId]);
-  await p.query('DELETE FROM plans WHERE vehicle_id = $1 AND owner_id = $2', [vehicleId, ownerId]);
-  return remove('vehicles', ownerId, vehicleId);
-}
-
-/** Solo para los tests: deja el almacén en memoria como estaba. */
-export function resetMemory(): void {
-  memory.vehicles = [];
-  memory.records = [];
-  memory.plans = [];
+  return remove('vehicles', userId, vehicleId);
 }

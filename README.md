@@ -6,8 +6,13 @@ tiempo, o por lo que se cumpla antes.
 
 **Ionic 9 · Angular 22 · TypeScript · API en Node · PostgreSQL**
 
+Cada persona tiene su cuenta: los datos viven en el servidor y están
+disponibles desde cualquier dispositivo.
+
 ## Qué hace
 
+- **Cuentas** con correo y contraseña. El garaje es el mismo desde el móvil,
+  la tableta o el ordenador.
 - **Vehículos** con foto, matrícula, kilometraje y consumo mensual estimado.
 - **Planes de mantenimiento** con intervalos por kilómetros y/o meses, a partir
   de una lista de tareas habituales (aceite, frenos, ITV, distribución…).
@@ -76,12 +81,17 @@ sin configurar nada. La app lo advierte en pantalla.
 
 ## Base de datos
 
-Sin `POSTGRES_URL` la API guarda en memoria. Con la variable definida crea las
-tablas sola al arrancar:
+PostgreSQL es obligatorio: las cuentas tienen que persistir entre reinicios.
 
 ```bash
-POSTGRES_URL="postgres://usuario:clave@host/base" npm run api
+POSTGRES_URL="postgres://usuario:clave@host/base" \
+AUTH_SECRET="$(openssl rand -base64 48)" \
+npm run api
 ```
+
+El esquema se crea solo al arrancar. Las tablas usan claves foráneas con
+`ON DELETE CASCADE`, así que borrar una cuenta o un vehículo se lleva lo que
+cuelga de él sin depender de que la aplicación se acuerde.
 
 ## Despliegue
 
@@ -89,12 +99,11 @@ Configurado para Vercel en [`vercel.json`](vercel.json): `server.ts` se
 despliega como función y sirve `/api/*`, y el resto de rutas van a la SPA.
 
 1. Sube el repositorio a GitHub e impórtalo en [vercel.com/new](https://vercel.com/new).
-2. Añade la variable de entorno `POSTGRES_URL` con una base de datos Postgres
-   (Vercel Postgres, Neon o Supabase tienen plan gratuito).
+2. Añade dos variables de entorno:
+   - `POSTGRES_URL` — una base de datos Postgres (Neon o Supabase tienen plan
+     gratuito).
+   - `AUTH_SECRET` — el resultado de `openssl rand -base64 48`.
 3. Despliega. Cada push a la rama principal actualiza el sitio.
-
-Sin `POSTGRES_URL` el despliegue funciona igual, pero en modo demostración: los
-datos no sobreviven al reciclado de la función.
 
 ## App móvil
 
@@ -124,9 +133,26 @@ src/app/shared/           Componentes y pipes reutilizables
 scripts/                  Utilidades de mantenimiento del proyecto
 ```
 
-## Identificación
+## Autenticación
 
-No hay cuentas. El navegador genera un identificador de garaje y lo envía en la
-cabecera `x-garage-id`. Se puede copiar desde Ajustes para abrir el mismo
-garaje en otro dispositivo. No es autenticación: quien tenga el identificador
-ve el garaje, y la app lo advierte.
+Implementada en la propia API, sin servicios de terceros:
+
+- **Contraseñas** con `scrypt` (N=16384, el mínimo que recomienda OWASP para
+  uso interactivo) y una sal por contraseña. Se usa el módulo `crypto` de Node
+  en lugar de bcrypt para no arrastrar una dependencia nativa, que en
+  serverless complica el despliegue.
+- **Sesiones** con un JWT firmado con HMAC-SHA256, en una cookie `httpOnly` y
+  `SameSite=Lax`: al no ser accesible desde JavaScript, un XSS no puede
+  robarla. En producción se marca además como `Secure`.
+- **Comparaciones en tiempo constante** tanto para la contraseña como para la
+  firma del token, y el mismo mensaje de error tanto si el correo no existe
+  como si la contraseña falla, para no revelar qué correos están registrados.
+- **Aislamiento** entre cuentas garantizado en la consulta, no solo en la
+  interfaz: cada `SELECT` filtra por `user_id`.
+
+Requiere la variable `AUTH_SECRET` (mínimo 32 caracteres). Sin ella la API no
+arranca, porque cualquiera podría firmar tokens válidos:
+
+```bash
+openssl rand -base64 48
+```

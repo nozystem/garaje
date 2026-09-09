@@ -28,7 +28,6 @@ export class GarageStore {
   private readonly _loading = signal(false);
   private readonly _loaded = signal(false);
   private readonly _error = signal<string | null>(null);
-  private readonly _persistent = signal(true);
 
   readonly vehicles = this._vehicles.asReadonly();
   readonly records = this._records.asReadonly();
@@ -36,8 +35,6 @@ export class GarageStore {
   readonly loading = this._loading.asReadonly();
   readonly loaded = this._loaded.asReadonly();
   readonly error = this._error.asReadonly();
-  /** Falso si la API corre sin base de datos: hay que advertirlo. */
-  readonly persistent = this._persistent.asReadonly();
 
   /** Estado de cada plan activo, evaluado contra su vehículo. */
   readonly planStatuses = computed<PlanStatus[]>(() => {
@@ -95,15 +92,11 @@ export class GarageStore {
     this._error.set(null);
 
     try {
-      const [snapshot, health] = await Promise.all([
-        firstValueFrom(this.api.loadGarage()),
-        firstValueFrom(this.api.health()).catch(() => null),
-      ]);
+      const snapshot = await firstValueFrom(this.api.loadGarage());
 
       this._vehicles.set(snapshot.vehicles);
       this._records.set(snapshot.records);
       this._plans.set(snapshot.plans);
-      this._persistent.set(health?.persistent ?? true);
       this._loaded.set(true);
     } catch (error) {
       this._error.set((error as Error).message);
@@ -161,6 +154,15 @@ export class GarageStore {
       this.api.updatePlan(id, { ...current, ...changes })
     );
     this._plans.update((list) => list.map((p) => (p.id === id ? updated : p)));
+  }
+
+  /** Vacía el estado: al cambiar de cuenta no debe quedar nada del anterior. */
+  reset(): void {
+    this._vehicles.set([]);
+    this._records.set([]);
+    this._plans.set([]);
+    this._loaded.set(false);
+    this._error.set(null);
   }
 
   async removePlan(id: string): Promise<void> {

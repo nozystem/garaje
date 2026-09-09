@@ -1,26 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
-/**
- * Identifica el garaje sin obligar a registrarse.
- *
- * El cliente genera un id aleatorio la primera vez y lo envía en esta
- * cabecera. No es autenticación —quien conozca el id ve ese garaje— y la app
- * lo advierte en la interfaz. A cambio, cualquiera puede probar el proyecto
- * sin crear una cuenta, que es lo que interesa en un portfolio.
- */
-const OWNER_HEADER = 'x-garage-id';
-
-export function ownerFrom(req: IncomingMessage): string | null {
-  const raw = req.headers[OWNER_HEADER];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-
-  if (!value || !/^[a-z0-9-]{8,64}$/i.test(value)) {
-    return null;
-  }
-  return value;
-}
-
 export function json(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -37,7 +17,7 @@ export function badRequest(res: ServerResponse, errors: string[]): void {
 }
 
 export function unauthorized(res: ServerResponse): void {
-  json(res, 401, { error: `Falta la cabecera ${OWNER_HEADER}` });
+  json(res, 401, { error: 'No has iniciado sesión' });
 }
 
 export function notFound(res: ServerResponse): void {

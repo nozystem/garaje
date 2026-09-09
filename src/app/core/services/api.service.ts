@@ -1,11 +1,10 @@
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
 import { MaintenancePlan, MaintenanceRecord } from '../models/maintenance.model';
 import { Vehicle, VehicleDraft } from '../models/vehicle.model';
-import { GarageIdService } from './garage-id.service';
 
 export interface GarageSnapshot {
   vehicles: Vehicle[];
@@ -15,8 +14,6 @@ export interface GarageSnapshot {
 
 export interface HealthStatus {
   status: string;
-  /** Falso cuando la API corre sin base de datos: los datos no sobreviven. */
-  persistent: boolean;
   time: string;
 }
 
@@ -24,7 +21,6 @@ export interface HealthStatus {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
-  private readonly garageId = inject(GarageIdService);
 
   private readonly base = '/api';
 
@@ -36,60 +32,56 @@ export class ApiService {
 
   loadGarage(): Observable<GarageSnapshot> {
     return this.http
-      .get<GarageSnapshot>(`${this.base}/garage`, { headers: this.headers() })
+      .get<GarageSnapshot>(`${this.base}/garage`, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   createVehicle(draft: VehicleDraft): Observable<Vehicle> {
     return this.http
-      .post<Vehicle>(`${this.base}/vehicles`, draft, { headers: this.headers() })
+      .post<Vehicle>(`${this.base}/vehicles`, draft, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   updateVehicle(id: string, draft: VehicleDraft): Observable<Vehicle> {
     return this.http
-      .put<Vehicle>(`${this.base}/vehicles/${id}`, draft, { headers: this.headers() })
+      .put<Vehicle>(`${this.base}/vehicles/${id}`, draft, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   deleteVehicle(id: string): Observable<unknown> {
     return this.http
-      .delete(`${this.base}/vehicles/${id}`, { headers: this.headers() })
+      .delete(`${this.base}/vehicles/${id}`, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   createRecord(record: Omit<MaintenanceRecord, 'id' | 'createdAt'>): Observable<MaintenanceRecord> {
     return this.http
-      .post<MaintenanceRecord>(`${this.base}/records`, record, { headers: this.headers() })
+      .post<MaintenanceRecord>(`${this.base}/records`, record, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   deleteRecord(id: string): Observable<unknown> {
     return this.http
-      .delete(`${this.base}/records/${id}`, { headers: this.headers() })
+      .delete(`${this.base}/records/${id}`, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   createPlan(plan: Omit<MaintenancePlan, 'id' | 'createdAt'>): Observable<MaintenancePlan> {
     return this.http
-      .post<MaintenancePlan>(`${this.base}/plans`, plan, { headers: this.headers() })
+      .post<MaintenancePlan>(`${this.base}/plans`, plan, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   updatePlan(id: string, plan: Partial<MaintenancePlan>): Observable<MaintenancePlan> {
     return this.http
-      .put<MaintenancePlan>(`${this.base}/plans/${id}`, plan, { headers: this.headers() })
+      .put<MaintenancePlan>(`${this.base}/plans/${id}`, plan, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 
   deletePlan(id: string): Observable<unknown> {
     return this.http
-      .delete(`${this.base}/plans/${id}`, { headers: this.headers() })
+      .delete(`${this.base}/plans/${id}`, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
-  }
-
-  private headers(): HttpHeaders {
-    return new HttpHeaders({ 'x-garage-id': this.garageId.id });
   }
 
   /** Traduce el error HTTP a algo que se pueda enseñar en pantalla. */

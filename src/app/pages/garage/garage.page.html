@@ -38,15 +38,6 @@
     </ion-card>
   } @else {
 
-    @if (!store.persistent()) {
-      <ion-card class="state state--warning">
-        <ion-card-content>
-          <strong>Modo demostración.</strong> La API corre sin base de datos, así
-          que los datos se pierden al reiniciarse el servidor.
-        </ion-card-content>
-      </ion-card>
-    }
-
     @if (!hasVehicles()) {
       <div class="empty">
         <ion-icon name="car-outline"></ion-icon>

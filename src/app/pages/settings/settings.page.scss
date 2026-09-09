@@ -13,52 +13,38 @@
   overflow: hidden;
 }
 
-.id {
-  padding: 16px 18px 14px;
+.account {
+  padding: 26px 0 8px;
+  text-align: center;
 }
 
-.id__head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ion-color-medium);
+.account__avatar {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: rgba(var(--ion-color-primary-rgb), 0.14);
+  color: var(--ion-color-primary);
+  font-size: 44px;
 }
 
-.id__value {
-  display: block;
-  margin-bottom: 12px;
-  padding: 11px 13px;
-  border-radius: var(--app-radius-sm);
-  background: var(--ion-color-step-100);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  word-break: break-all;
-}
-
-/* El icono va en línea con el texto: con flex, un <strong> dentro rompía el
-   párrafo en dos columnas. */
-.hint {
+.account__name {
   margin: 0;
-  padding: 0 18px 16px;
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.account__email {
+  margin: 2px 0 0;
+  font-size: 0.88rem;
   color: var(--ion-color-medium);
 }
 
-.hint ion-icon {
-  vertical-align: -2px;
-  margin-right: 5px;
-  font-size: 15px;
-  color: var(--ion-color-warning);
-}
-
-.hint strong {
-  color: var(--ion-text-color);
-  font-weight: 600;
+.danger {
+  margin-top: 22px;
+  font-size: 0.92rem;
 }
 
 .counts {

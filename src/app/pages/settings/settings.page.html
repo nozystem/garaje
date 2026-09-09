@@ -9,32 +9,15 @@
 
 <ion-content class="ion-padding-horizontal">
 
-  <h3 class="group">Tu garaje</h3>
-  <div class="card">
-    <div class="id">
-      <div class="id__head">
-        <ion-icon name="key-outline" aria-hidden="true"></ion-icon>
-        <span>Identificador</span>
+  @if (auth.user(); as user) {
+    <div class="account">
+      <div class="account__avatar">
+        <ion-icon name="person-circle-outline" aria-hidden="true"></ion-icon>
       </div>
-      <code class="id__value">{{ garageId.id }}</code>
-      <ion-button
-        expand="block"
-        fill="outline"
-        size="small"
-        (click)="copyId()"
-      >
-        <ion-icon slot="start" [name]="copied() ? 'checkmark-outline' : 'copy-outline'"></ion-icon>
-        {{ copied() ? 'Copiado' : 'Copiar identificador' }}
-      </ion-button>
+      <h2 class="account__name">{{ user.name }}</h2>
+      <p class="account__email">{{ user.email }}</p>
     </div>
-
-    <p class="hint">
-      <ion-icon name="warning-outline" aria-hidden="true"></ion-icon>
-      No hay cuentas ni contraseñas: este identificador <strong>es</strong> tu
-      garaje. Guárdalo para abrirlo en otro dispositivo, y ten en cuenta que
-      quien lo tenga puede ver tus datos.
-    </p>
-  </div>
+  }
 
   <h3 class="group">Contenido</h3>
   <div class="card">
@@ -54,45 +37,35 @@
     </div>
   </div>
 
-  <h3 class="group">Acciones</h3>
+  <h3 class="group">Cuenta</h3>
   <div class="card">
-    <ion-item button lines="full" (click)="openExisting()">
-      <ion-icon slot="start" name="log-in-outline" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Abrir otro garaje</h3>
-        <p>Con el identificador de otro dispositivo</p>
-      </ion-label>
-    </ion-item>
-
-    <ion-item button lines="none" (click)="exportData()">
+    <ion-item button lines="full" (click)="exportData()">
       <ion-icon slot="start" name="download-outline" color="primary"></ion-icon>
       <ion-label>
         <h3>Descargar mis datos</h3>
-        <p>Una copia en JSON de todo el garaje</p>
+        <p>Una copia en JSON de todo tu garaje</p>
       </ion-label>
     </ion-item>
-  </div>
 
-  <h3 class="group">Almacenamiento</h3>
-  <div class="card">
-    <ion-item lines="none">
-      <ion-icon
-        slot="start"
-        [name]="store.persistent() ? 'cloud-outline' : 'cloud-offline-outline'"
-        [color]="store.persistent() ? 'success' : 'warning'"
-      ></ion-icon>
+    <ion-item button lines="none" (click)="logout()">
+      <ion-icon slot="start" name="log-out-outline" color="medium"></ion-icon>
       <ion-label>
-        <h3>{{ store.persistent() ? 'Base de datos activa' : 'Modo demostración' }}</h3>
-        <p>
-          {{ store.persistent()
-            ? 'Tus datos se guardan de forma permanente.'
-            : 'Sin base de datos: los datos se pierden al reiniciarse el servidor.' }}
-        </p>
+        <h3>Cerrar sesión</h3>
+        <p>Tus datos siguen guardados</p>
       </ion-label>
     </ion-item>
   </div>
 
-  <p class="about">
-    Garaje · Ionic + Angular · API en Node
-  </p>
+  <ion-button
+    expand="block"
+    fill="clear"
+    color="danger"
+    class="danger"
+    (click)="confirmDeleteAccount()"
+  >
+    <ion-icon slot="start" name="trash-outline"></ion-icon>
+    Borrar mi cuenta
+  </ion-button>
+
+  <p class="about">Garaje · Ionic + Angular · API en Node</p>
 </ion-content>
