@@ -11,7 +11,8 @@
     "test": "vitest run",
     "lint": "ng lint",
     "api": "node --experimental-strip-types --watch server.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "api:env": "node --experimental-strip-types --env-file=.env.local --watch server.ts"
   },
   "private": true,
   "type": "module",
@@ -41,6 +42,7 @@
     "jsdom": "^26.0.0",
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.61.0",
+    "vercel": "^59.13.1",
     "vitest": "^4.0.8"
   },
   "description": "An Ionic project",
