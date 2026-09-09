@@ -6,11 +6,15 @@ Three steps. The first two are free accounts.
 
 1. Sign up at [neon.tech](https://neon.tech).
 2. Create a project. Region: **Frankfurt** or **Paris** if you are in Europe.
-3. Copy the connection string. It looks like this:
+3. Copy the connection string. Neon offers two — use the **pooled** one, the
+   host with `-pooler` in it:
 
 ```
-postgresql://user:password@ep-something-123.eu-central-1.aws.neon.tech/neondb?sslmode=require
+postgresql://user:password@ep-something-123-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
 ```
+
+Serverless functions open a connection per invocation, and the pooler is what
+keeps that from exhausting the database's connection limit.
 
 You do not need to create any tables: the API creates the schema on startup.
 

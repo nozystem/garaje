@@ -15,6 +15,10 @@ export function sslFor(url: string): false | { rejectUnauthorized: boolean } {
   return isLocal || wantsNoSsl ? false : { rejectUnauthorized: false };
 }
 
+export function connectionString(url: string): string {
+  return url.replace(/([?&])sslmode=(require|prefer|verify-ca)\b/, '$1sslmode=no-verify');
+}
+
 export async function getPool(): Promise<import('pg').Pool> {
   const url = process.env['POSTGRES_URL'];
 
@@ -27,7 +31,7 @@ export async function getPool(): Promise<import('pg').Pool> {
   if (!pool) {
     const { Pool } = await import('pg');
     pool = new Pool({
-      connectionString: url,
+      connectionString: connectionString(url),
       ssl: sslFor(url),
       max: 1,
     });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sslFor } from './store.ts';
+import { connectionString, sslFor } from './store.ts';
 
 describe('sslFor', () => {
   it('disables SSL for a local Postgres', () => {
@@ -26,5 +26,23 @@ describe('sslFor', () => {
     expect(sslFor('postgres://user@localhost.ejemplo.com/garaje')).toEqual({
       rejectUnauthorized: false,
     });
+  });
+});
+
+describe('connectionString', () => {
+  it('rewrites sslmode=require so pg does not warn about verify-full', () => {
+    expect(
+      connectionString('postgresql://u:p@host/db?sslmode=require&channel_binding=require')
+    ).toBe('postgresql://u:p@host/db?sslmode=no-verify&channel_binding=require');
+  });
+
+  it('leaves a connection string without sslmode untouched', () => {
+    const url = 'postgres://user@127.0.0.1:5432/garage';
+    expect(connectionString(url)).toBe(url);
+  });
+
+  it('does not touch sslmode=disable', () => {
+    const url = 'postgres://user@host/db?sslmode=disable';
+    expect(connectionString(url)).toBe(url);
   });
 });
