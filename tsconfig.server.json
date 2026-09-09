@@ -1,11 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    // El servidor se ejecuta con el type stripping de Node, que exige la
-    // extensión .ts en los imports. No se compila, solo se comprueba.
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["server.ts", "server/**/*.ts"]
+  "include": ["server.ts", "server/**/*.ts", "api/**/*.ts"]
 }

@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import externalCatalog from '../data/open-vehicle-db.json' with { type: 'json' };
 
 export type CatalogSource = 'open-vehicle-db' | 'local';
 
@@ -73,9 +72,8 @@ export function loadCatalog(): CatalogMake[] {
 
   const merged = new Map<string, CatalogMake>();
 
-  try {
-    const file = join(import.meta.dirname, '..', 'data', 'open-vehicle-db.json');
-    const external = JSON.parse(readFileSync(file, 'utf8')) as ExternalFile;
+  {
+    const external = externalCatalog as ExternalFile;
 
     for (const make of external.makes) {
       merged.set(make.slug, {
@@ -85,7 +83,6 @@ export function loadCatalog(): CatalogMake[] {
         sources: ['open-vehicle-db'],
       });
     }
-  } catch {
   }
 
   for (const entry of SPAIN) {
