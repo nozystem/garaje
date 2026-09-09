@@ -96,7 +96,12 @@ npm start          # app on :4200, proxying /api
 ```
 POSTGRES_URL=postgres://user@127.0.0.1:5432/garage
 AUTH_SECRET=anything-longer-than-32-characters-for-local
+CAR_IMAGES_API_KEY=your-key-from-carimagesapi.com
 ```
+
+Point it at a local database, never at the deployed one. Development wipes
+tables between test runs, and production data should never be within reach of
+that.
 
 The schema is created on startup. Tables use foreign keys with
 `ON DELETE CASCADE`, so deleting an account or a vehicle removes what hangs off
