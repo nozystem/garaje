@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { handleRequest } from '../server/lib/router.ts';
+import { handleRequest } from '../lib/router.ts';
 
 function originalPath(req: IncomingMessage): string {
   const header = req.headers['x-vercel-original-path'];

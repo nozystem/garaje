@@ -20,3 +20,6 @@ npm-debug.log
 *.swp
 .DS_Store
 Thumbs.db
+
+# Generated API bundle
+/api/index.js

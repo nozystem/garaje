@@ -6,13 +6,14 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build && npm run build:api",
     "watch": "ng build --watch --configuration development",
     "test": "vitest run",
     "lint": "ng lint",
     "api": "node --experimental-strip-types --watch server.ts",
     "test:watch": "vitest",
-    "api:env": "node --experimental-strip-types --env-file=.env.local --watch server.ts"
+    "api:env": "node --experimental-strip-types --env-file=.env.local --watch server.ts",
+    "build:api": "node scripts/build-api.mjs"
   },
   "private": true,
   "type": "module",
@@ -38,6 +39,7 @@
     "@ionic/angular-toolkit": "^13.0.0",
     "@types/pg": "^8.23.1",
     "angular-eslint": "22.0.0",
+    "esbuild": "^0.28.2",
     "eslint": "^9.16.0",
     "jsdom": "^26.0.0",
     "typescript": "~6.0.0",
