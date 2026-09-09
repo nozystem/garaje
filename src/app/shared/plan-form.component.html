@@ -1,11 +1,11 @@
 <ion-header class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-button (click)="dismissed.emit()">Cancelar</ion-button>
+      <ion-button (click)="dismissed.emit()">Cancel</ion-button>
     </ion-buttons>
-    <ion-title>{{ editing() ? 'Editar tarea' : 'Nueva tarea' }}</ion-title>
+    <ion-title>{{ editing() ? 'Edit task' : 'New task' }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button strong="true" (click)="onSubmit()">Guardar</ion-button>
+      <ion-button strong="true" (click)="onSubmit()">Save</ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -13,9 +13,8 @@
 <ion-content class="ion-padding-horizontal">
   <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
 
-    <!-- Los intervalos habituales, para no tener que saberse el libro. -->
     @if (!editing()) {
-      <h3 class="group">Habituales para {{ vehicle().nickname }}</h3>
+      <h3 class="group">Common for {{ vehicle().nickname }}</h3>
       <div class="presets">
         @for (preset of presets; track preset.title) {
           <button
@@ -36,44 +35,44 @@
       </div>
     }
 
-    <h3 class="group">Detalles</h3>
+    <h3 class="group">Details</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="Nombre de la tarea"
+          label="Task name"
           labelPlacement="floating"
           formControlName="title"
-          placeholder="Cambio de aceite"
+          placeholder="Oil change"
         ></ion-input>
       </ion-item>
       @if (invalid('title')) {
-        <p class="error">Ponle un nombre a la tarea</p>
+        <p class="error">Give the task a name</p>
       }
 
       <div class="divider"></div>
 
       <ion-item lines="none" class="field">
         <ion-select
-          label="Categoría"
+          label="Category"
           labelPlacement="floating"
           formControlName="category"
-          [interfaceOptions]="{ header: 'Categoría' }"
+          [interfaceOptions]="{ header: 'Category' }"
         >
           @for (category of categories; track category) {
             <ion-select-option [value]="category">
               {{ category | categoryLabel }}
             </ion-select-option>
           }
-          <ion-select-option value="other">Otros</ion-select-option>
+          <ion-select-option value="other">Other</ion-select-option>
         </ion-select>
       </ion-item>
     </div>
 
-    <h3 class="group">¿Cada cuánto?</h3>
+    <h3 class="group">How often?</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="Cada X kilómetros"
+          label="Every X kilometres"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
@@ -87,31 +86,31 @@
 
       <ion-item lines="none" class="field">
         <ion-input
-          label="Cada X meses"
+          label="Every X months"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
           formControlName="intervalMonths"
           placeholder="12"
         ></ion-input>
-        <span slot="end" class="unit">meses</span>
+        <span slot="end" class="unit">monthes</span>
       </ion-item>
 
       @if (missingInterval && submitted()) {
-        <p class="error">Indica al menos uno de los dos intervalos</p>
+        <p class="error">Set at least one of the two intervals</p>
       } @else {
         <p class="hint">
           <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-          Si pones los dos, vence el que se cumpla antes.
+          With both set, whichever comes first wins.
         </p>
       }
     </div>
 
-    <h3 class="group">Última vez que se hizo</h3>
+    <h3 class="group">Last time it was done</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="A qué kilometraje"
+          label="At what mileage"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
@@ -125,7 +124,7 @@
 
       <ion-item lines="none" class="field">
         <ion-input
-          label="En qué fecha"
+          label="On what date"
           labelPlacement="floating"
           type="date"
           formControlName="lastServiceDate"
@@ -134,7 +133,7 @@
 
       <p class="hint">
         <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-        Si lo dejas en blanco, el contador empieza hoy.
+        Leave blank to start counting from today.
       </p>
     </div>
 

@@ -43,10 +43,6 @@ import {
 
 type Tab = 'plans' | 'history';
 
-/**
- * Ficha de un vehículo: su estado, los mantenimientos pendientes y el
- * historial de lo ya hecho.
- */
 @Component({
   selector: 'app-vehicle-detail',
   templateUrl: './vehicle-detail.page.html',
@@ -70,7 +66,6 @@ export class VehicleDetailPage implements OnInit {
   readonly vehicleId = signal<string>('');
   readonly tab = signal<Tab>('plans');
 
-  /** Modal de alta y edición de tareas. */
   readonly planModalOpen = signal(false);
   readonly editingPlan = signal<MaintenancePlan | null>(null);
 
@@ -102,7 +97,7 @@ export class VehicleDetailPage implements OnInit {
     await this.store.load();
 
     if (!this.vehicle()) {
-      void this.router.navigate(['/garaje']);
+      void this.router.navigate(['/garage']);
     }
   }
 
@@ -114,28 +109,27 @@ export class VehicleDetailPage implements OnInit {
     }
   }
 
-  /** Cierra una tarea: pide el kilometraje y registra la intervención. */
   async completePlan(status: PlanStatus): Promise<void> {
     const vehicle = this.vehicle();
     if (!vehicle) return;
 
     const alert = await this.alerts.create({
       header: status.plan.title,
-      message: '¿A qué kilometraje se ha hecho?',
+      message: 'At what mileage was it done?',
       inputs: [
         {
           name: 'mileage',
           type: 'number',
           value: vehicle.mileage,
-          placeholder: 'Kilómetros',
+          placeholder: 'Kilometres',
         },
-        { name: 'cost', type: 'number', placeholder: 'Coste (opcional)' },
-        { name: 'workshop', type: 'text', placeholder: 'Taller (opcional)' },
+        { name: 'cost', type: 'number', placeholder: 'Cost (optional)' },
+        { name: 'workshop', type: 'text', placeholder: 'Workshop (optional)' },
       ],
       buttons: [
-        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Cancel', role: 'cancel' },
         {
-          text: 'Registrar',
+          text: 'Log it',
           handler: (data) => {
             void this.registerCompletion(status, data);
           },
@@ -151,12 +145,11 @@ export class VehicleDetailPage implements OnInit {
   ): Promise<void> {
     const mileage = Number(data.mileage);
     if (!Number.isFinite(mileage) || mileage < 0) {
-      await this.toast('El kilometraje no es válido', 'danger');
+      await this.toast('That mileage is not valid', 'danger');
       return;
     }
 
     try {
-      // El servidor reprograma el plan y actualiza el cuentakilómetros.
       await this.store.addRecord({
         vehicleId: this.vehicleId(),
         planId: status.plan.id,
@@ -167,7 +160,7 @@ export class VehicleDetailPage implements OnInit {
         cost: data.cost ? Number(data.cost) : undefined,
         workshop: data.workshop || undefined,
       });
-      await this.toast('Mantenimiento registrado', 'success');
+      await this.toast('Service logged', 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -188,10 +181,10 @@ export class VehicleDetailPage implements OnInit {
       const editing = this.editingPlan();
       if (editing) {
         await this.store.updatePlan(editing.id, draft);
-        await this.toast('Tarea actualizada', 'success');
+        await this.toast('Task updated', 'success');
       } else {
         await this.store.addPlan(draft);
-        await this.toast('Tarea añadida', 'success');
+        await this.toast('Task added', 'success');
       }
       this.closePlanForm();
     } catch (error) {
@@ -201,12 +194,12 @@ export class VehicleDetailPage implements OnInit {
 
   async confirmDeletePlan(status: PlanStatus): Promise<void> {
     const alert = await this.alerts.create({
-      header: '¿Quitar la tarea?',
-      message: `"${status.plan.title}" dejará de avisarte. El historial se conserva.`,
+      header: 'Remove this task?',
+      message: `"${status.plan.title}" will stop reminding you. The history is kept.`,
       buttons: [
-        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Cancel', role: 'cancel' },
         {
-          text: 'Quitar',
+          text: 'Remove',
           role: 'destructive',
           handler: () => {
             void this.removePlan(status.plan.id);
@@ -220,7 +213,7 @@ export class VehicleDetailPage implements OnInit {
   private async removePlan(id: string): Promise<void> {
     try {
       await this.store.removePlan(id);
-      await this.toast('Tarea quitada', 'success');
+      await this.toast('Task removed', 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -228,13 +221,13 @@ export class VehicleDetailPage implements OnInit {
 
   async confirmDelete(): Promise<void> {
     const alert = await this.alerts.create({
-      header: '¿Borrar el vehículo?',
+      header: 'Delete this vehicle?',
       message:
-        'Se borrarán también su historial y sus mantenimientos. No se puede deshacer.',
+        'Its history and scheduled tasks will go too. This cannot be undone.',
       buttons: [
-        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Cancel', role: 'cancel' },
         {
-          text: 'Borrar',
+          text: 'Delete',
           role: 'destructive',
           handler: () => {
             void this.remove();
@@ -248,8 +241,8 @@ export class VehicleDetailPage implements OnInit {
   private async remove(): Promise<void> {
     try {
       await this.store.removeVehicle(this.vehicleId());
-      await this.toast('Vehículo borrado', 'success');
-      void this.router.navigate(['/garaje']);
+      await this.toast('Vehicle deleted', 'success');
+      void this.router.navigate(['/garage']);
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -258,7 +251,7 @@ export class VehicleDetailPage implements OnInit {
   async deleteRecord(id: string): Promise<void> {
     try {
       await this.store.removeRecord(id);
-      await this.toast('Registro borrado', 'success');
+      await this.toast('Record deleted', 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }

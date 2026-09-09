@@ -25,7 +25,7 @@
       <p class="plan__remaining">
         {{ remainingText }}
         @if (status().estimatedDueDate && status().status !== 'overdue') {
-          <ion-note> · aprox. {{ status().estimatedDueDate | date: 'MMM yyyy' }}</ion-note>
+          <ion-note> · approx. {{ status().estimatedDueDate | date: 'MMM yyyy' }}</ion-note>
         }
       </p>
     </ion-label>
@@ -39,9 +39,9 @@
         size="small"
         fill="clear"
         (click)="complete.emit(status())"
-        [attr.aria-label]="'Registrar ' + status().plan.title + ' como hecho'"
+        [attr.aria-label]="'Log ' + status().plan.title + ' como hecho'"
       >
-        Hecho
+        Done
       </ion-button>
     </div>
   </ion-item>

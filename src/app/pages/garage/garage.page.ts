@@ -44,12 +44,6 @@ import { GarageStore } from '../../core/services/garage.store';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
 import { VehicleCardComponent } from '../../shared/vehicle-card.component';
 
-/**
- * Portada del garaje.
- *
- * Lo primero que se ve es lo que necesita atención, no la lista de vehículos:
- * la pregunta que trae a alguien a esta app es "¿me toca algo?".
- */
 @Component({
   selector: 'app-garage',
   templateUrl: './garage.page.html',
@@ -109,7 +103,6 @@ export class GaragePage implements OnInit {
     void this.router.navigate(['/vehiculo', id]);
   }
 
-  /** Registrar una tarea como hecha se hace en la ficha del vehículo. */
   completePlan(vehicleId: string, planId: string): void {
     void this.router.navigate(['/vehiculo', vehicleId], {
       queryParams: { completar: planId },

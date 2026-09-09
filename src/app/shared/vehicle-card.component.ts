@@ -11,7 +11,6 @@ import { PlanStatus } from '../core/models/maintenance.model';
 import { Vehicle } from '../core/models/vehicle.model';
 import { KmPipe } from './status.pipe';
 
-/** Resumen de un vehículo: identidad, kilometraje y si algo le urge. */
 @Component({
   selector: 'app-vehicle-card',
   templateUrl: './vehicle-card.component.html',
@@ -42,10 +41,10 @@ export class VehicleCardComponent {
 
   get fuelLabel(): string {
     switch (this.vehicle().fuel) {
-      case 'diesel': return 'Diésel';
-      case 'electric': return 'Eléctrico';
-      case 'hybrid': return 'Híbrido';
-      default: return 'Gasolina';
+      case 'diesel': return 'Diesel';
+      case 'electric': return 'Electric';
+      case 'hybrid': return 'Hybrid';
+      default: return 'Petrol';
     }
   }
 }

@@ -54,7 +54,6 @@ export class SettingsPage {
     void this.store.load();
   }
 
-  /** Descarga una copia de los datos del usuario. */
   exportData(): void {
     const data = {
       exportedAt: new Date().toISOString(),
@@ -78,19 +77,19 @@ export class SettingsPage {
   async logout(): Promise<void> {
     await this.auth.logout();
     this.store.reset();
-    void this.router.navigate(['/entrar']);
+    void this.router.navigate(['/sign-in']);
   }
 
   async confirmDeleteAccount(): Promise<void> {
     const alert = await this.alerts.create({
-      header: '¿Borrar la cuenta?',
+      header: 'Delete your account?',
       message:
-        'Se borrarán tus vehículos, su historial y sus mantenimientos. ' +
-        'No se puede deshacer.',
+        'Your vehicles, their history and scheduled tasks will be deleted. ' +
+        'This cannot be undone.',
       buttons: [
-        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Cancel', role: 'cancel' },
         {
-          text: 'Borrar cuenta',
+          text: 'Delete account',
           role: 'destructive',
           handler: () => {
             void this.deleteAccount();
@@ -105,7 +104,7 @@ export class SettingsPage {
     try {
       await this.auth.deleteAccount();
       this.store.reset();
-      void this.router.navigate(['/entrar']);
+      void this.router.navigate(['/sign-in']);
     } catch (error) {
       const toast = await this.toasts.create({
         message: AuthService.message(error),

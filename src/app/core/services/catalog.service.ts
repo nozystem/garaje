@@ -23,14 +23,6 @@ interface CatalogResponse {
   makes: CatalogMake[];
 }
 
-/**
- * Catálogo de marcas y modelos, servido por la API.
- *
- * Se pide una vez por tipo de vehículo y se guarda en memoria: son datos que
- * cambian pocas veces al año y no merece la pena volver a bajarlos al cambiar
- * de pestaña. Si la petición falla, el formulario sigue funcionando con los
- * campos en texto libre.
- */
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly http = inject(HttpClient);

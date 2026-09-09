@@ -22,13 +22,6 @@ import { AuthService } from '../../core/services/auth.service';
 
 type Mode = 'login' | 'register';
 
-/**
- * Acceso a la aplicación.
- *
- * Registro e inicio de sesión comparten pantalla: son dos campos de
- * diferencia y separarlos en dos rutas solo añade un paso más para el
- * usuario.
- */
 @Component({
   selector: 'app-auth',
   templateUrl: './auth.page.html',
@@ -64,7 +57,6 @@ export class AuthPage {
     this.mode.set(mode);
     this.submitted.set(false);
 
-    // El nombre solo es obligatorio al registrarse.
     const name = this.form.controls.name;
     if (mode === 'register') {
       name.setValidators([Validators.required, Validators.minLength(2)]);
@@ -96,7 +88,7 @@ export class AuthPage {
       } else {
         await this.auth.login(email, password);
       }
-      void this.router.navigate(['/garaje']);
+      void this.router.navigate(['/garage']);
     } catch (error) {
       const toast = await this.toasts.create({
         message: AuthService.message(error),

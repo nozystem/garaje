@@ -31,14 +31,6 @@ import { CategoryIconPipe, CategoryLabelPipe } from './status.pipe';
 
 export type PlanDraft = Omit<MaintenancePlan, 'id' | 'createdAt'>;
 
-/**
- * Alta y edición de una tarea de mantenimiento, dentro de un modal.
- *
- * Ofrece primero los intervalos habituales del tipo de vehículo (aceite cada
- * 15.000 km, ITV cada 12 meses…) porque casi nadie se sabe el libro de
- * mantenimiento de memoria; elegir uno rellena el formulario y luego se puede
- * ajustar.
- */
 @Component({
   selector: 'app-plan-form',
   templateUrl: './plan-form.component.html',
@@ -81,7 +73,6 @@ export class PlanFormComponent implements OnInit {
     lastServiceDate: [''],
   });
 
-  /** Los intervalos habituales para este vehículo. */
   get presets() {
     return presetsFor(this.vehicle().type, this.vehicle().fuel);
   }
@@ -110,7 +101,6 @@ export class PlanFormComponent implements OnInit {
     });
   }
 
-  /** Un plan sin ningún intervalo no vencería nunca. */
   get missingInterval(): boolean {
     const { intervalKm, intervalMonths } = this.form.getRawValue();
     return !intervalKm && !intervalMonths;

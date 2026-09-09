@@ -1,24 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * Catálogo de marcas y modelos.
- *
- * Combina dos fuentes:
- *
- *  - **open-vehicle-db** (github.com/plowman/open-vehicle-db): 70 marcas y
- *    1.678 modelos, actualizado en 2026. Cubre bien el mercado estadounidense.
- *  - **Catálogo propio para España**: el dataset anterior no incluye SEAT,
- *    Cupra, Dacia, Škoda, Citroën, Opel, Volkswagen ni MG, y de Renault solo
- *    trae los cinco modelos que se vendieron en EE.UU. en los ochenta. Tampoco
- *    tiene marcas de moto más allá de Honda, Suzuki y BMW.
- *
- * Al fusionarlas, cada marca indica su origen para que la interfaz pueda
- * mostrarlo. Los datos externos se descargan con `scripts/fetch-vehicle-db.mjs`
- * y se sirven desde el repositorio: así el despliegue no depende de que GitHub
- * responda.
- */
-
 export type CatalogSource = 'open-vehicle-db' | 'local';
 
 export interface CatalogModel {
@@ -46,10 +28,6 @@ interface ExternalFile {
   }[];
 }
 
-/**
- * Marcas y modelos habituales en España que faltan en el dataset externo o
- * están mal cubiertos. Los modelos son las series comunes del parque actual.
- */
 const SPAIN: { name: string; type: string; models: string[] }[] = [
   { name: 'SEAT', type: 'car', models: ['Ibiza', 'León', 'Arona', 'Ateca', 'Tarraco', 'Toledo', 'Altea', 'Córdoba', 'Exeo', 'Mii'] },
   { name: 'Cupra', type: 'car', models: ['Formentor', 'León', 'Ateca', 'Born', 'Terramar', 'Tavascan'] },
@@ -63,7 +41,6 @@ const SPAIN: { name: string; type: string; models: string[] }[] = [
   { name: 'Peugeot', type: 'car', models: ['208', '2008', '308', '3008', '408', '5008', '508', 'Partner', 'Rifter', 'Expert', 'Boxer'] },
   { name: 'Iveco', type: 'van', models: ['Daily'] },
 
-  // Motos: el dataset externo no cubre prácticamente ninguna.
   { name: 'Honda', type: 'motorcycle', models: ['CB125R', 'CB500F', 'CB650R', 'CBR600RR', 'CRF300L', 'Africa Twin', 'Forza 125', 'PCX 125', 'NC750X', 'Transalp'] },
   { name: 'Yamaha', type: 'motorcycle', models: ['MT-03', 'MT-07', 'MT-09', 'R1', 'R7', 'Tracer 7', 'Ténéré 700', 'XMAX 125', 'NMAX 125', 'TMAX'] },
   { name: 'Kawasaki', type: 'motorcycle', models: ['Z650', 'Z900', 'Ninja 400', 'Ninja 650', 'Versys 650', 'Vulcan S', 'Eliminator'] },
@@ -91,13 +68,11 @@ function slugify(name: string): string {
 
 let cache: CatalogMake[] | null = null;
 
-/** Fusiona las dos fuentes. El resultado se cachea entre invocaciones. */
 export function loadCatalog(): CatalogMake[] {
   if (cache) return cache;
 
   const merged = new Map<string, CatalogMake>();
 
-  // 1. El dataset externo, si está descargado.
   try {
     const file = join(import.meta.dirname, '..', 'data', 'open-vehicle-db.json');
     const external = JSON.parse(readFileSync(file, 'utf8')) as ExternalFile;
@@ -111,11 +86,8 @@ export function loadCatalog(): CatalogMake[] {
       });
     }
   } catch {
-    // Sin el fichero, el catálogo se queda con las marcas locales. La app
-    // sigue funcionando: es un desplegable, no un requisito.
   }
 
-  // 2. El catálogo español encima, que completa y corrige al anterior.
   for (const entry of SPAIN) {
     const slug = slugify(entry.name);
     const existing = merged.get(slug);
@@ -129,7 +101,6 @@ export function loadCatalog(): CatalogMake[] {
       continue;
     }
 
-    // Añadir solo lo que no esté ya, comparando sin distinguir mayúsculas.
     const known = new Set(existing.models.map((m) => m.name.toLowerCase()));
     for (const model of models) {
       if (!known.has(model.name.toLowerCase())) {
@@ -138,7 +109,6 @@ export function loadCatalog(): CatalogMake[] {
     }
     existing.models.sort((a, b) => a.name.localeCompare(b.name, 'es'));
     if (!existing.sources.includes('local')) existing.sources.push('local');
-    // El nombre local manda: viene acentuado y con la grafía correcta.
     existing.name = entry.name;
   }
 
@@ -146,14 +116,12 @@ export function loadCatalog(): CatalogMake[] {
   return cache;
 }
 
-/** MERCEDES-BENZ -> Mercedes-Benz */
 function titleCase(name: string): string {
   return name
     .toLowerCase()
     .replace(/(^|[\s\-/])([a-záéíóúñ])/g, (_, sep, ch) => sep + ch.toUpperCase());
 }
 
-/** Marcas que tienen al menos un modelo del tipo pedido. */
 export function makesForType(type: string): CatalogMake[] {
   return loadCatalog()
     .map((make) => ({

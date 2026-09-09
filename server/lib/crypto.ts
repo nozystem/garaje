@@ -7,7 +7,6 @@ import {
 } from 'node:crypto';
 import { promisify } from 'node:util';
 
-/** promisify pierde la sobrecarga que acepta opciones; se tipa a mano. */
 const scrypt = promisify(scryptCallback) as (
   password: string | Buffer,
   salt: string | Buffer,
@@ -15,32 +14,24 @@ const scrypt = promisify(scryptCallback) as (
   options: { N: number; r: number; p: number },
 ) => Promise<Buffer>;
 
-/**
- * Parámetros de scrypt. N=16384 es el mínimo recomendado por OWASP para uso
- * interactivo: tarda ~100 ms, suficiente para encarecer un ataque por fuerza
- * bruta sin que el login se note lento.
- */
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 
-/**
- * Deriva el hash de una contraseña.
- *
- * Se usa scrypt del propio Node en lugar de bcrypt para no añadir una
- * dependencia nativa, que en serverless complica el despliegue. Cada hash
- * lleva su sal, así que dos contraseñas iguales producen hashes distintos.
- */
+const TOKEN_TTL_DAYS = 30;
+
+export const TOKEN_MAX_AGE_SECONDS = TOKEN_TTL_DAYS * 86400;
+
+interface TokenPayload {
+  sub: string;
+  iat: number;
+  exp: number;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derived = await scrypt(password, salt, SCRYPT.keylen, SCRYPT);
   return `scrypt$${salt.toString('base64')}$${derived.toString('base64')}`;
 }
 
-/**
- * Comprueba una contraseña contra su hash.
- *
- * La comparación es en tiempo constante: comparar con === filtraría, por el
- * tiempo de respuesta, cuántos bytes coinciden.
- */
 export async function verifyPassword(
   password: string,
   stored: string
@@ -61,26 +52,13 @@ export async function verifyPassword(
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
-/* --- Tokens de sesión ------------------------------------------------------ */
-
-interface TokenPayload {
-  /** Id del usuario. */
-  sub: string;
-  /** Emisión y caducidad, en segundos desde epoch. */
-  iat: number;
-  exp: number;
-}
-
-const TOKEN_TTL_DAYS = 30;
-
 function secret(): string {
   const value = process.env['AUTH_SECRET'];
 
   if (!value || value.length < 32) {
-    // Sin secreto, cualquiera podría firmar tokens válidos. Es preferible no
-    // arrancar a arrancar con una seguridad aparente.
     throw new Error(
-      'Falta AUTH_SECRET (mínimo 32 caracteres). Genera uno con: openssl rand -base64 48'
+      'AUTH_SECRET is missing or too short (32 characters minimum). ' +
+        'Generate one with: openssl rand -base64 48'
     );
   }
   return value;
@@ -98,13 +76,6 @@ function sign(data: string): string {
   return base64url(createHmac('sha256', secret()).update(data).digest());
 }
 
-/**
- * Emite un token de sesión.
- *
- * Es un JWT firmado con HMAC-SHA256, escrito a mano para no añadir una
- * dependencia por 30 líneas. No lleva datos sensibles: solo el id del usuario
- * y las fechas, porque el contenido de un JWT es legible por cualquiera.
- */
 export function issueToken(userId: string): string {
   const now = Math.floor(Date.now() / 1000);
   const payload: TokenPayload = {
@@ -118,14 +89,12 @@ export function issueToken(userId: string): string {
   return `${header}.${body}.${sign(`${header}.${body}`)}`;
 }
 
-/** Devuelve el id del usuario si el token es válido y no ha caducado. */
 export function verifyToken(token: string): string | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
 
   const [header, body, signature] = parts;
 
-  // Comparación en tiempo constante también aquí.
   const expected = sign(`${header}.${body}`);
   const a = Buffer.from(signature);
   const b = Buffer.from(expected);
@@ -146,5 +115,3 @@ export function verifyToken(token: string): string | null {
 export function newId(): string {
   return randomUUID();
 }
-
-export const TOKEN_MAX_AGE_SECONDS = TOKEN_TTL_DAYS * 86400;

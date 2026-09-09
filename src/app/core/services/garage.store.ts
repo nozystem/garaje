@@ -10,14 +10,6 @@ import { Vehicle, VehicleDraft } from '../models/vehicle.model';
 import { ApiService } from './api.service';
 import { byUrgency, evaluatePlan } from './maintenance-calculator';
 
-/**
- * Estado del garaje.
- *
- * Los datos se cargan una vez y se mantienen en signals; las escrituras
- * actualizan el estado local con la respuesta del servidor en lugar de
- * recargarlo todo. El estado derivado (vencimientos, avisos) se calcula con
- * `computed`, así que nunca queda desincronizado.
- */
 @Injectable({ providedIn: 'root' })
 export class GarageStore {
   private readonly api = inject(ApiService);
@@ -36,7 +28,6 @@ export class GarageStore {
   readonly loaded = this._loaded.asReadonly();
   readonly error = this._error.asReadonly();
 
-  /** Estado de cada plan activo, evaluado contra su vehículo. */
   readonly planStatuses = computed<PlanStatus[]>(() => {
     const vehiclesById = new Map(this._vehicles().map((v) => [v.id, v]));
 
@@ -50,7 +41,6 @@ export class GarageStore {
       .sort(byUrgency);
   });
 
-  /** Lo que necesita atención: vencido o a punto. Alimenta la portada. */
   readonly alerts = computed(() =>
     this.planStatuses().filter(
       (s) => s.status === 'overdue' || s.status === 'due-soon'
@@ -61,7 +51,6 @@ export class GarageStore {
     () => this.planStatuses().filter((s) => s.status === 'overdue').length
   );
 
-  /** Gasto total registrado, para el resumen. */
   readonly totalSpent = computed(() =>
     this._records().reduce((sum, r) => sum + (r.cost ?? 0), 0)
   );
@@ -84,7 +73,6 @@ export class GarageStore {
     return this.alerts().filter((s) => s.plan.vehicleId === vehicleId);
   }
 
-  /** Carga el garaje. Repetir la llamada no vuelve a pedir los datos. */
   async load(force = false): Promise<void> {
     if (this._loading() || (this._loaded() && !force)) return;
 
@@ -124,11 +112,6 @@ export class GarageStore {
     this._plans.update((list) => list.filter((p) => p.vehicleId !== id));
   }
 
-  /**
-   * Registra un mantenimiento. El servidor puede actualizar de paso el
-   * kilometraje del vehículo y reprogramar el plan asociado, así que se
-   * recarga el garaje para reflejarlo sin duplicar aquí esas reglas.
-   */
   async addRecord(
     record: Omit<MaintenanceRecord, 'id' | 'createdAt'>
   ): Promise<void> {
@@ -156,7 +139,6 @@ export class GarageStore {
     this._plans.update((list) => list.map((p) => (p.id === id ? updated : p)));
   }
 
-  /** Vacía el estado: al cambiar de cuenta no debe quedar nada del anterior. */
   reset(): void {
     this._vehicles.set([]);
     this._records.set([]);

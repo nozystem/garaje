@@ -1,12 +1,3 @@
-/**
- * Validación de la entrada.
- *
- * Escrita a mano en lugar de con una librería de esquemas: son tres formularios
- * y así el bundle de la función no arrastra dependencias. Cada validador
- * devuelve el objeto saneado o la lista de errores, para poder mostrarlos
- * todos juntos en vez de uno a uno.
- */
-
 export type Validation<T> =
   | { ok: true; value: T }
   | { ok: false; errors: string[] };
@@ -17,6 +8,8 @@ const CATEGORIES = [
   'oil', 'filters', 'brakes', 'tires', 'battery',
   'coolant', 'timing-belt', 'inspection', 'insurance', 'other',
 ];
+
+const MAX_PHOTO_BYTES = 300_000;
 
 function asRecord(input: unknown): Record<string, unknown> {
   return typeof input === 'object' && input !== null
@@ -42,8 +35,23 @@ function isoDate(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/** Tope del lado del servidor; el cliente ya reduce antes de enviar. */
-const MAX_PHOTO_BYTES = 300_000;
+function photoOrNull(value: unknown, errors: string[]): string | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (typeof value !== 'string') {
+    errors.push('The photo is not valid');
+    return null;
+  }
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) {
+    errors.push('The photo format is not supported');
+    return null;
+  }
+  if (value.length > MAX_PHOTO_BYTES) {
+    errors.push('The photo is too large');
+    return null;
+  }
+  return value;
+}
 
 export interface VehicleInput {
   nickname: string;
@@ -73,13 +81,13 @@ export function validateVehicle(input: unknown): Validation<VehicleInput> {
   const type = str(body['type'], 20);
   const fuel = str(body['fuel'], 20);
 
-  if (!nickname) errors.push('El nombre es obligatorio');
-  if (!make) errors.push('La marca es obligatoria');
-  if (!model) errors.push('El modelo es obligatorio');
-  if (year === null) errors.push(`El año debe estar entre 1900 y ${maxYear}`);
-  if (mileage === null) errors.push('El kilometraje debe ser un número positivo');
-  if (!type || !VEHICLE_TYPES.includes(type)) errors.push('Tipo de vehículo no válido');
-  if (!fuel || !FUEL_TYPES.includes(fuel)) errors.push('Combustible no válido');
+  if (!nickname) errors.push('Name is required');
+  if (!make) errors.push('Make is required');
+  if (!model) errors.push('Model is required');
+  if (year === null) errors.push(`Year must be between 1900 and ${maxYear}`);
+  if (mileage === null) errors.push('Mileage must be a positive number');
+  if (!type || !VEHICLE_TYPES.includes(type)) errors.push('Invalid vehicle type');
+  if (!fuel || !FUEL_TYPES.includes(fuel)) errors.push('Invalid fuel type');
 
   const photo = photoOrNull(body['photo'], errors);
 
@@ -104,28 +112,6 @@ export function validateVehicle(input: unknown): Validation<VehicleInput> {
   };
 }
 
-/**
- * Acepta solo imágenes en data URL. Se comprueba el prefijo para no guardar
- * cualquier cosa que llegue en ese campo, y el tamaño para no reventar la fila.
- */
-function photoOrNull(value: unknown, errors: string[]): string | null {
-  if (value === null || value === undefined || value === '') return null;
-
-  if (typeof value !== 'string') {
-    errors.push('La foto no es válida');
-    return null;
-  }
-  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) {
-    errors.push('El formato de la foto no es válido');
-    return null;
-  }
-  if (value.length > MAX_PHOTO_BYTES) {
-    errors.push('La foto es demasiado grande');
-    return null;
-  }
-  return value;
-}
-
 export interface RecordInput {
   vehicleId: string;
   category: string;
@@ -148,11 +134,11 @@ export function validateRecord(input: unknown): Validation<RecordInput> {
   const mileage = num(body['mileage'], 0, 3_000_000);
   const category = str(body['category'], 20);
 
-  if (!vehicleId) errors.push('Falta el vehículo');
-  if (!title) errors.push('El título es obligatorio');
-  if (!date) errors.push('La fecha no es válida');
-  if (mileage === null) errors.push('El kilometraje debe ser un número positivo');
-  if (!category || !CATEGORIES.includes(category)) errors.push('Categoría no válida');
+  if (!vehicleId) errors.push('Vehicle is required');
+  if (!title) errors.push('Title is required');
+  if (!date) errors.push('Invalid date');
+  if (mileage === null) errors.push('Mileage must be a positive number');
+  if (!category || !CATEGORIES.includes(category)) errors.push('Invalid category');
 
   if (errors.length) return { ok: false, errors };
 
@@ -194,13 +180,12 @@ export function validatePlan(input: unknown): Validation<PlanInput> {
   const intervalKm = num(body['intervalKm'], 1, 500_000);
   const intervalMonths = num(body['intervalMonths'], 1, 240);
 
-  if (!vehicleId) errors.push('Falta el vehículo');
-  if (!title) errors.push('El título es obligatorio');
-  if (!category || !CATEGORIES.includes(category)) errors.push('Categoría no válida');
+  if (!vehicleId) errors.push('Vehicle is required');
+  if (!title) errors.push('Title is required');
+  if (!category || !CATEGORIES.includes(category)) errors.push('Invalid category');
 
-  // Un plan sin ningún intervalo no vencería nunca: no tiene sentido guardarlo.
   if (intervalKm === null && intervalMonths === null) {
-    errors.push('Indica un intervalo en kilómetros, en meses, o ambos');
+    errors.push('Set an interval in kilometres, in months, or both');
   }
 
   if (errors.length) return { ok: false, errors };

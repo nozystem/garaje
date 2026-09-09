@@ -3,15 +3,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/**
- * PostgreSQL efímero para los tests.
- *
- * Desde que hay cuentas, la base de datos no es opcional, así que los tests
- * corren contra un Postgres real en vez de simulacros: se prueban también el
- * esquema, las claves foráneas y los índices únicos, que es donde suelen estar
- * los fallos.
- */
-
 const PORT = 54329;
 const BIN = '/usr/lib/postgresql/16/bin';
 
@@ -41,8 +32,6 @@ export function startTestDb(): string {
 export async function stopTestDb(): Promise<void> {
   if (!dir) return;
 
-  // Cerrar el pool antes de parar el servidor: si no, pg emite un error no
-  // capturado al cortarse la conexión de golpe.
   const { closePool } = await import('./store.ts');
   await closePool();
 
@@ -51,16 +40,13 @@ export async function stopTestDb(): Promise<void> {
       stdio: 'ignore',
     });
   } catch {
-    // Si ya estaba parado, no hay nada que hacer.
   }
   rmSync(dir, { recursive: true, force: true });
   dir = null;
 }
 
-/** Deja las tablas vacías entre tests, sin recrear el esquema. */
 export async function truncateAll(): Promise<void> {
   const { getPool } = await import('./store.ts');
   const pool = await getPool();
-  // users basta: el resto cuelga de él por clave foránea.
   await pool.query('TRUNCATE users CASCADE');
 }

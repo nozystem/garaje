@@ -17,7 +17,6 @@ export interface HealthStatus {
   time: string;
 }
 
-/** Acceso a la API. Todo el manejo de errores de red vive aquí. */
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
@@ -84,10 +83,9 @@ export class ApiService {
       .pipe(catchError(this.toFriendlyError));
   }
 
-  /** Traduce el error HTTP a algo que se pueda enseñar en pantalla. */
   private toFriendlyError(error: HttpErrorResponse) {
     if (error.status === 0) {
-      return throwError(() => new Error('Sin conexión con el servidor.'));
+      return throwError(() => new Error('Cannot reach the server.'));
     }
 
     const details = error.error?.details;
@@ -96,7 +94,7 @@ export class ApiService {
     }
 
     return throwError(
-      () => new Error(error.error?.error ?? 'No se ha podido completar la operación.')
+      () => new Error(error.error?.error ?? 'The request could not be completed.')
     );
   }
 }

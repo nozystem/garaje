@@ -44,33 +44,24 @@ import { CatalogMake, CatalogService } from '../../core/services/catalog.service
 import { PhotoService } from '../../core/services/photo.service';
 import { GarageStore } from '../../core/services/garage.store';
 
-/** Colores sugeridos para distinguir vehículos de un vistazo. */
 const COLORS = [
   '#e74c3c', '#4d9de0', '#2ec27e', '#f5a623',
   '#9b59b6', '#16a085', '#5d6d7e', '#e67e22',
 ];
 
 const TYPE_OPTIONS: { value: VehicleType; label: string; icon: string }[] = [
-  { value: 'car', label: 'Coche', icon: 'car-sport-outline' },
-  { value: 'motorcycle', label: 'Moto', icon: 'bicycle-outline' },
-  { value: 'van', label: 'Furgoneta', icon: 'bus-outline' },
+  { value: 'car', label: 'Car', icon: 'car-sport-outline' },
+  { value: 'motorcycle', label: 'Motorbike', icon: 'bicycle-outline' },
+  { value: 'van', label: 'Van', icon: 'bus-outline' },
 ];
 
 const FUEL_OPTIONS: { value: FuelType; label: string; icon: string }[] = [
-  { value: 'gasoline', label: 'Gasolina', icon: 'water-outline' },
-  { value: 'diesel', label: 'Diésel', icon: 'flash-outline' },
-  { value: 'hybrid', label: 'Híbrido', icon: 'leaf-outline' },
-  { value: 'electric', label: 'Eléctrico', icon: 'battery-charging-outline' },
+  { value: 'gasoline', label: 'Petrol', icon: 'water-outline' },
+  { value: 'diesel', label: 'Diesel', icon: 'flash-outline' },
+  { value: 'hybrid', label: 'Hybrid', icon: 'leaf-outline' },
+  { value: 'electric', label: 'Electric', icon: 'battery-charging-outline' },
 ];
 
-/**
- * Alta y edición de vehículos.
- *
- * Marca y modelo se eligen del catálogo que sirve la API en /api/catalog, que
- * fusiona el dataset open-vehicle-db con un catálogo propio para el parque
- * español. Ambos campos admiten texto libre para lo que no esté en la lista, y
- * si el catálogo no carga el formulario sigue siendo usable.
- */
 @Component({
   selector: 'app-vehicle-form',
   templateUrl: './vehicle-form.page.html',
@@ -102,18 +93,15 @@ export class VehicleFormPage implements OnInit {
   readonly editingId = signal<string | null>(null);
   readonly submitted = signal(false);
 
-  /** El tipo elegido decide qué marcas se ofrecen. */
   readonly selectedType = signal<VehicleType>('car');
   readonly selectedMake = signal<string>('');
 
-  /** Marcas del tipo elegido, tal y como las devuelve la API. */
   readonly availableMakes = signal<CatalogMake[]>([]);
 
   readonly availableModels = computed(() =>
     this.catalog.modelsFor(this.availableMakes(), this.selectedMake())
   );
 
-  /** Icono del tipo elegido, para la vista previa de la cabecera. */
   readonly typeIcon = computed(
     () =>
       TYPE_OPTIONS.find((o) => o.value === this.selectedType())?.icon ??
@@ -154,7 +142,7 @@ export class VehicleFormPage implements OnInit {
 
     const vehicle = this.store.vehicle(id);
     if (!vehicle) {
-      void this.router.navigate(['/garaje']);
+      void this.router.navigate(['/garage']);
       return;
     }
 
@@ -178,7 +166,6 @@ export class VehicleFormPage implements OnInit {
     });
   }
 
-  /** Cambiar de tipo invalida la marca y el modelo, y recarga el catálogo. */
   async onTypeChange(type: VehicleType): Promise<void> {
     this.selectedType.set(type);
     this.form.patchValue({ type, make: '', model: '' });
@@ -199,10 +186,6 @@ export class VehicleFormPage implements OnInit {
     this.photoInput()?.nativeElement.click();
   }
 
-  /**
-   * La imagen se reduce en el navegador antes de guardarla: una foto de móvil
-   * pesa varios megas y no tiene sentido meterla entera en la base de datos.
-   */
   async onPhotoSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -215,7 +198,6 @@ export class VehicleFormPage implements OnInit {
       await this.toast((error as Error).message, 'danger');
     } finally {
       this.processingPhoto.set(false);
-      // Permite volver a elegir el mismo archivo si hizo falta reintentar.
       input.value = '';
     }
   }
@@ -234,7 +216,7 @@ export class VehicleFormPage implements OnInit {
 
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      await this.toast('Revisa los campos marcados', 'warning');
+      await this.toast('Check the highlighted fields', 'warning');
       return;
     }
 
@@ -245,12 +227,12 @@ export class VehicleFormPage implements OnInit {
       const id = this.editingId();
       if (id) {
         await this.store.updateVehicle(id, value);
-        await this.toast('Vehículo actualizado', 'success');
-        void this.router.navigate(['/vehiculo', id]);
+        await this.toast('Vehicle updated', 'success');
+        void this.router.navigate(['/vehicle', id]);
       } else {
         const created = await this.store.addVehicle(value);
-        await this.toast('Vehículo añadido', 'success');
-        void this.router.navigate(['/vehiculo', created.id]);
+        await this.toast('Vehicle added', 'success');
+        void this.router.navigate(['/vehicle', created.id]);
       }
     } catch (error) {
       await this.toast((error as Error).message, 'danger');

@@ -29,13 +29,6 @@ import {
 import type { StoredPlan, StoredRecord, StoredVehicle } from './types.ts';
 import { validatePlan, validateRecord, validateVehicle } from './validate.ts';
 
-/**
- * Enrutado de la API.
- *
- * Se resuelve a mano en vez de con Express: son ocho rutas y así el servidor
- * no arrastra dependencias ni middleware que no se usa. La firma es la de
- * Node, de modo que el mismo código corre en local y como función en Vercel.
- */
 export async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse
@@ -44,10 +37,7 @@ export async function handleRequest(
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const method = req.method ?? 'GET';
 
-  // Comprobación de vida: no necesita garaje y sirve para monitorización.
   if (path === '/api/health') {
-    // Comprueba la base de datos: un health que responde 'ok' sin verificar
-    // nada da falsa tranquilidad justo cuando más falta hace.
     try {
       const pool = await getPool();
       await pool.query('SELECT 1');
@@ -62,7 +52,6 @@ export async function handleRequest(
     return;
   }
 
-  // Autenticación: son las únicas rutas accesibles sin sesión.
   if (path === '/api/auth/register') {
     if (method !== 'POST') return methodNotAllowed(res, ['POST']);
     return handleRegister(req, res);
@@ -83,14 +72,12 @@ export async function handleRequest(
     return handleMe(req, res);
   }
 
-  // El catálogo es público y de solo lectura: no necesita garaje.
   if (path === '/api/catalog') {
     if (method !== 'GET') return methodNotAllowed(res, ['GET']);
 
     const type = url.searchParams.get('type');
     const makes = type ? makesForType(type) : loadCatalog();
 
-    // Cambia pocas veces al año: se puede cachear con tranquilidad.
     res.setHeader('Cache-Control', 'public, max-age=86400');
     json(res, 200, {
       count: makes.length,
@@ -121,7 +108,7 @@ export async function handleRequest(
     }
   }
 
-  const segments = path.split('/').filter(Boolean).slice(1); // quita 'api'
+  const segments = path.split('/').filter(Boolean).slice(1);
   const [resource, id] = segments;
 
   switch (resource) {
@@ -131,7 +118,6 @@ export async function handleRequest(
       return;
 
     case 'account':
-      // Borrar la cuenta arrastra todo su contenido por clave foránea.
       if (method !== 'DELETE') return methodNotAllowed(res, ['DELETE']);
       await deleteUser(userId);
       res.setHeader('Set-Cookie', 'garaje_session=; Path=/; HttpOnly; Max-Age=0');
@@ -194,7 +180,6 @@ async function handleVehicles(
     const updated: StoredVehicle = {
       ...existing,
       ...parsed.value,
-      // El sello solo cambia si el kilometraje realmente se movió.
       mileageUpdatedAt:
         parsed.value.mileage !== existing.mileage
           ? new Date().toISOString()
@@ -240,8 +225,6 @@ async function handleRecords(
 
     await upsert('records', userId, record.id, record, record.vehicleId);
 
-    // Anotar un mantenimiento posterior al último dato conocido también
-    // actualiza el cuentakilómetros: evita tener que corregirlo a mano.
     if (record.mileage > vehicle.mileage) {
       await upsert('vehicles', userId, vehicle.id, {
         ...vehicle,
@@ -250,7 +233,6 @@ async function handleRecords(
       });
     }
 
-    // Si el registro cierra una tarea planificada, la tarea se reprograma.
     if (record.planId) {
       const plan = await findById<StoredPlan>('plans', userId, record.planId);
       if (plan) {

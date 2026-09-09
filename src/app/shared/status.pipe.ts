@@ -17,7 +17,6 @@ export class CategoryIconPipe implements PipeTransform {
   }
 }
 
-/** Color de Ionic para cada nivel de urgencia. */
 @Pipe({ name: 'statusColor' })
 export class StatusColorPipe implements PipeTransform {
   transform(status: DueStatus): string {
@@ -34,19 +33,18 @@ export class StatusColorPipe implements PipeTransform {
 export class StatusLabelPipe implements PipeTransform {
   transform(status: DueStatus): string {
     switch (status) {
-      case 'overdue': return 'Vencido';
-      case 'due-soon': return 'Toca ya';
-      case 'upcoming': return 'Se acerca';
-      default: return 'Al día';
+      case 'overdue': return 'Overdue';
+      case 'due-soon': return 'Due now';
+      case 'upcoming': return 'Coming up';
+      default: return 'Up to date';
     }
   }
 }
 
-/** Formatea kilómetros con separador de miles. */
 @Pipe({ name: 'km' })
 export class KmPipe implements PipeTransform {
   transform(value: number | undefined): string {
     if (value === undefined) return '—';
-    return new Intl.NumberFormat('es-ES').format(Math.round(value)) + ' km';
+    return new Intl.NumberFormat('en-GB').format(Math.round(value)) + ' km';
   }
 }

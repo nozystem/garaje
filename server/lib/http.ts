@@ -4,8 +4,6 @@ import { randomUUID } from 'node:crypto';
 export function json(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // Los datos del garaje no se cachean; quien quiera otra cosa (el catálogo)
-  // pone su propia cabecera antes de llamar aquí.
   if (!res.hasHeader('Cache-Control')) {
     res.setHeader('Cache-Control', 'no-store');
   }
@@ -13,32 +11,30 @@ export function json(res: ServerResponse, status: number, body: unknown): void {
 }
 
 export function badRequest(res: ServerResponse, errors: string[]): void {
-  json(res, 400, { error: 'Datos inválidos', details: errors });
+  json(res, 400, { error: 'Invalid data', details: errors });
 }
 
 export function unauthorized(res: ServerResponse): void {
-  json(res, 401, { error: 'No has iniciado sesión' });
+  json(res, 401, { error: 'Not signed in' });
 }
 
 export function notFound(res: ServerResponse): void {
-  json(res, 404, { error: 'No encontrado' });
+  json(res, 404, { error: 'Not found' });
 }
 
 export function methodNotAllowed(res: ServerResponse, allowed: string[]): void {
   res.setHeader('Allow', allowed.join(', '));
-  json(res, 405, { error: 'Método no permitido' });
+  json(res, 405, { error: 'Method not allowed' });
 }
 
-/** Lee y parsea el cuerpo JSON, con un límite para no tragar cualquier cosa. */
 export async function readJson(req: IncomingMessage): Promise<unknown> {
-  // Suficiente para un vehículo con foto ya reducida en el cliente.
   const MAX_BYTES = 400_000;
   const chunks: Buffer[] = [];
   let size = 0;
 
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BYTES) throw new Error('Cuerpo demasiado grande');
+    if (size > MAX_BYTES) throw new Error('Request body too large');
     chunks.push(chunk as Buffer);
   }
 
@@ -47,7 +43,7 @@ export async function readJson(req: IncomingMessage): Promise<unknown> {
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    throw new Error('JSON mal formado');
+    throw new Error('Malformed JSON');
   }
 }
 

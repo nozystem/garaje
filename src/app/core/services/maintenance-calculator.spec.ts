@@ -92,7 +92,6 @@ describe('evaluatePlan · vencimiento por tiempo', () => {
     );
 
     expect(result.limitingFactor).toBe('time');
-    // Del 1 de enero al 1 de junio son 151 días; 365.28 - 151 ≈ 214.
     expect(result.daysRemaining).toBeGreaterThan(200);
     expect(result.daysRemaining).toBeLessThan(220);
   });
@@ -152,7 +151,6 @@ describe('evaluatePlan · estimación de fecha', () => {
       NOW
     );
 
-    // Quedan 5.000 km a 1.000 km/mes: unos 5 meses.
     const due = new Date(result.estimatedDueDate!);
     const months = (due.getTime() - NOW.getTime()) / (30.44 * 86_400_000);
     expect(months).toBeGreaterThan(4.5);

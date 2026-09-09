@@ -1,50 +1,75 @@
-# Garaje
+# Garage
 
-Control de mantenimiento de vehículos. Registra tus coches y motos, apunta lo
-que les vas haciendo, y la app calcula qué toca y cuándo —por kilómetros, por
-tiempo, o por lo que se cumpla antes.
+Vehicle maintenance tracker. Register your cars and motorbikes, log what you
+have done to them, and the app works out what is due and when — by mileage, by
+time, or by whichever comes first.
 
-**Ionic 9 · Angular 22 · TypeScript · API en Node · PostgreSQL**
+**Ionic 9 · Angular 22 · TypeScript · Node API · PostgreSQL**
 
-Cada persona tiene su cuenta: los datos viven en el servidor y están
-disponibles desde cualquier dispositivo.
+Every person gets an account: data lives on the server and is available from
+any device.
 
-## Qué hace
+## What it does
 
-- **Cuentas** con correo y contraseña. El garaje es el mismo desde el móvil,
-  la tableta o el ordenador.
-- **Vehículos** con foto, matrícula, kilometraje y consumo mensual estimado.
-- **Planes de mantenimiento** con intervalos por kilómetros y/o meses, a partir
-  de una lista de tareas habituales (aceite, frenos, ITV, distribución…).
-- **Avisos** ordenados por urgencia, con la fecha estimada de vencimiento
-  proyectada según el uso real del vehículo.
-- **Historial** de intervenciones con coste y taller.
-- **Catálogo** de 89 marcas y 1.848 modelos servido por la API.
+- **Accounts** with email and password. The same garage from your phone,
+  tablet or laptop.
+- **Vehicles** with photo, plate, mileage and estimated monthly usage.
+- **Maintenance plans** with intervals in kilometres and/or months, seeded from
+  a list of common tasks (oil, brakes, inspection, timing belt…).
+- **Alerts** sorted by urgency, with an estimated due date projected from the
+  vehicle's real usage.
+- **History** of services with cost and workshop.
+- **Catalog** of 89 makes and 1,848 models served by the API.
 
-## Lo que tiene de interesante
+## What makes it interesting
 
-El **cálculo de vencimientos** ([`maintenance-calculator.ts`](src/app/core/services/maintenance-calculator.ts))
-es el núcleo del proyecto. Un plan puede vencer por kilómetros, por tiempo o
-por ambos; cuando hay dos criterios manda el que se agote antes, que es como
-están escritos los libros de mantenimiento ("cada 15.000 km o 12 meses, lo que
-ocurra primero"). Está aislado del framework y cubierto por tests.
+The **due-date calculation**
+([`maintenance-calculator.ts`](src/app/core/services/maintenance-calculator.ts))
+is the core of the project. A plan can fall due by mileage, by time, or by
+both; when there are two criteria the one that runs out first wins, which is
+how service books are written ("every 15,000 km or 12 months, whichever comes
+first"). It is framework-agnostic and covered by tests.
 
-Tres **reglas de negocio viven en el servidor**, no en el cliente:
+Three **business rules live on the server**, not in the client:
 
-- Registrar un mantenimiento con más kilómetros de los conocidos actualiza el
-  cuentakilómetros del vehículo; uno antiguo no lo hace retroceder.
-- Cerrar una tarea planificada la reprograma automáticamente.
-- Borrar un vehículo arrastra su historial y sus planes.
+- Logging a service with more mileage than known updates the vehicle's
+  odometer; an older one never rolls it back.
+- Completing a scheduled task reschedules it automatically.
+- Deleting a vehicle takes its history and plans with it.
 
-El **catálogo de vehículos** fusiona el dataset abierto
-[open-vehicle-db](https://github.com/plowman/open-vehicle-db) con un catálogo
-propio para el parque español: el dataset original no incluye SEAT, Cupra,
-Dacia, Škoda, Citroën, Opel ni Volkswagen, y de Renault solo trae los modelos
-que se vendieron en EE.UU. en los ochenta. Se evaluaron también NHTSA vPIC
-(sin marcas europeas), CarQueryAPI (fuera de servicio) y auto-data.net
-(comercial). Ver [`server/lib/catalog.ts`](server/lib/catalog.ts).
+The **vehicle catalog** merges the open
+[open-vehicle-db](https://github.com/plowman/open-vehicle-db) dataset with a
+local catalog for the Spanish market: the original does not include SEAT,
+Cupra, Dacia, Škoda, Citroën, Opel or Volkswagen, and only lists the Renault
+models sold in the US during the eighties. NHTSA vPIC (no European makes),
+CarQueryAPI (offline) and auto-data.net (commercial) were also evaluated. See
+[`server/lib/catalog.ts`](server/lib/catalog.ts).
 
-## Requisitos
+## Authentication
+
+Implemented in the API itself, without third-party services:
+
+- **Passwords** hashed with `scrypt` (N=16384, the minimum OWASP recommends for
+  interactive use) and a per-password salt. Node's own `crypto` is used instead
+  of bcrypt to avoid a native dependency, which complicates serverless
+  deployments.
+- **Sessions** as a JWT signed with HMAC-SHA256, in an `httpOnly`,
+  `SameSite=Lax` cookie: not reachable from JavaScript, so an XSS cannot steal
+  it. Marked `Secure` in production.
+- **Constant-time comparisons** for both the password and the token signature,
+  and the same error whether the email does not exist or the password is wrong,
+  so registered addresses cannot be probed.
+- **Isolation** enforced in the query, not just the UI: every `SELECT` filters
+  by `user_id`.
+
+Requires `AUTH_SECRET` (32 characters minimum). Without it the API refuses to
+start, because anyone could forge valid tokens:
+
+```bash
+openssl rand -base64 48
+```
+
+## Requirements
 
 Node 22.
 
@@ -53,65 +78,52 @@ nvm use 22
 npm install --legacy-peer-deps
 ```
 
-> El flag es necesario por un fallo de resolución de peers de npm 10.9 con
-> vitest. No afecta a las versiones instaladas.
+> The flag works around a peer-resolution bug in npm 10.9 with vitest. It does
+> not change the installed versions.
 
-## Desarrollo
+## Development
 
-Dos procesos: la API y la app.
+Two processes: the API and the app. PostgreSQL is required — accounts have to
+survive restarts.
 
 ```bash
-npm run api      # API en localhost:3210
-npm start        # app en localhost:4200, con proxy a /api
+npm run api:env    # API on :3210, reading .env.local
+npm start          # app on :4200, proxying /api
 ```
 
-La API arranca sin base de datos y guarda en memoria, así que se puede probar
-sin configurar nada. La app lo advierte en pantalla.
+`.env.local` (already gitignored):
 
-## Comandos
+```
+POSTGRES_URL=postgres://user@127.0.0.1:5432/garage
+AUTH_SECRET=anything-longer-than-32-characters-for-local
+```
 
-| Comando | Qué hace |
-| ------- | -------- |
-| `npm start` | Servidor de desarrollo |
-| `npm run api` | API en local, con recarga |
-| `npm run build` | Build de producción en `www/` |
-| `npm test` | Tests (vitest) |
+The schema is created on startup. Tables use foreign keys with
+`ON DELETE CASCADE`, so deleting an account or a vehicle removes what hangs off
+it without the application having to remember.
+
+## Commands
+
+| Command | What it does |
+| ------- | ------------ |
+| `npm start` | Dev server |
+| `npm run api:env` | API with `.env.local`, watching for changes |
+| `npm run build` | Production build into `www/` |
+| `npm test` | Tests (vitest, against an ephemeral PostgreSQL) |
 | `npm run lint` | ESLint |
-| `node scripts/fetch-vehicle-db.mjs` | Actualiza el catálogo externo |
+| `node scripts/fetch-vehicle-db.mjs` | Refresh the external catalog |
 
-## Base de datos
+## Deployment
 
-PostgreSQL es obligatorio: las cuentas tienen que persistir entre reinicios.
+See [DEPLOY.md](DEPLOY.md).
 
-```bash
-POSTGRES_URL="postgres://usuario:clave@host/base" \
-AUTH_SECRET="$(openssl rand -base64 48)" \
-npm run api
-```
+## Mobile app
 
-El esquema se crea solo al arrancar. Las tablas usan claves foráneas con
-`ON DELETE CASCADE`, así que borrar una cuenta o un vehículo se lleva lo que
-cuelga de él sin depender de que la aplicación se acuerde.
-
-## Despliegue
-
-Configurado para Vercel en [`vercel.json`](vercel.json): `server.ts` se
-despliega como función y sirve `/api/*`, y el resto de rutas van a la SPA.
-
-1. Sube el repositorio a GitHub e impórtalo en [vercel.com/new](https://vercel.com/new).
-2. Añade dos variables de entorno:
-   - `POSTGRES_URL` — una base de datos Postgres (Neon o Supabase tienen plan
-     gratuito).
-   - `AUTH_SECRET` — el resultado de `openssl rand -base64 48`.
-3. Despliega. Cada push a la rama principal actualiza el sitio.
-
-## App móvil
-
-La versión web funciona como PWA. Para generar un binario nativo:
+The web build works as a PWA. To produce a native binary:
 
 ```bash
 npm install @capacitor/core @capacitor/cli --legacy-peer-deps
-npx cap init garaje com.sergiorubio.garaje --web-dir=www
+npx cap init garage com.sergiorubio.garage --web-dir=www
 
 npm install @capacitor/android --legacy-peer-deps
 npx cap add android
@@ -119,40 +131,17 @@ npm run build && npx cap sync
 npx cap open android
 ```
 
-Tras cada `npm run build` hay que ejecutar `npx cap sync`.
+Run `npx cap sync` after every `npm run build`.
 
-## Estructura
+## Layout
 
 ```
-server.ts                 Punto de entrada de la API
-server/lib/               Enrutado, validación, almacenamiento y catálogo
-server/data/              Catálogo externo descargado
-src/app/core/             Modelos, cálculo de vencimientos y estado
-src/app/pages/            Pantallas
-src/app/shared/           Componentes y pipes reutilizables
-scripts/                  Utilidades de mantenimiento del proyecto
-```
-
-## Autenticación
-
-Implementada en la propia API, sin servicios de terceros:
-
-- **Contraseñas** con `scrypt` (N=16384, el mínimo que recomienda OWASP para
-  uso interactivo) y una sal por contraseña. Se usa el módulo `crypto` de Node
-  en lugar de bcrypt para no arrastrar una dependencia nativa, que en
-  serverless complica el despliegue.
-- **Sesiones** con un JWT firmado con HMAC-SHA256, en una cookie `httpOnly` y
-  `SameSite=Lax`: al no ser accesible desde JavaScript, un XSS no puede
-  robarla. En producción se marca además como `Secure`.
-- **Comparaciones en tiempo constante** tanto para la contraseña como para la
-  firma del token, y el mismo mensaje de error tanto si el correo no existe
-  como si la contraseña falla, para no revelar qué correos están registrados.
-- **Aislamiento** entre cuentas garantizado en la consulta, no solo en la
-  interfaz: cada `SELECT` filtra por `user_id`.
-
-Requiere la variable `AUTH_SECRET` (mínimo 32 caracteres). Sin ella la API no
-arranca, porque cualquiera podría firmar tokens válidos:
-
-```bash
-openssl rand -base64 48
+server.ts                 API entry point for local development
+api/index.ts              API entry point on Vercel
+server/lib/               Routing, validation, storage, auth and catalog
+server/data/              Downloaded external catalog
+src/app/core/             Models, due-date calculation and state
+src/app/pages/            Screens
+src/app/shared/           Reusable components and pipes
+scripts/                  Project maintenance utilities
 ```

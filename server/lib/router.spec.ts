@@ -4,18 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { handleRequest } from './router.ts';
 import { startTestDb, stopTestDb, truncateAll } from './test-db.ts';
 
-/**
- * Tests de la API contra un servidor HTTP y un PostgreSQL reales: así se
- * comprueban también los códigos de estado, las cookies, el esquema y las
- * claves foráneas, que es donde suelen estar los fallos.
- */
-
 let server: Server;
 let base: string;
 
 beforeAll(async () => {
   process.env['POSTGRES_URL'] = startTestDb();
-  process.env['AUTH_SECRET'] = 'secreto-de-pruebas-suficientemente-largo-1234567';
+  process.env['AUTH_SECRET'] = 'a-test-secret-that-is-long-enough-1234567890';
 
   server = createServer((req, res) => {
     handleRequest(req, res).catch((error) => {
@@ -36,7 +30,6 @@ afterAll(async () => {
 
 beforeEach(() => truncateAll());
 
-/** Cliente que recuerda la cookie de sesión, como haría un navegador. */
 function client() {
   let cookie = '';
 
@@ -57,7 +50,7 @@ function client() {
       if (set) cookie = set.split(';')[0];
       return res;
     },
-    async register(email = 'ana@ejemplo.com', password = 'contraseña-larga') {
+    async register(email = 'ana@example.com', password = 'a-long-enough-password') {
       return this.fetch('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password, name: 'Ana' }),
@@ -67,7 +60,7 @@ function client() {
 }
 
 const CAR = {
-  nickname: 'El coche',
+  nickname: 'The car',
   make: 'SEAT',
   model: 'León',
   year: 2018,
@@ -76,84 +69,84 @@ const CAR = {
   mileage: 100_000,
 };
 
-describe('registro', () => {
-  it('crea la cuenta y devuelve una sesión', async () => {
+describe('registration', () => {
+  it('creates the account and returns a session', async () => {
     const c = client();
     const res = await c.register();
 
     expect(res.status).toBe(201);
     const { user } = await res.json();
-    expect(user.email).toBe('ana@ejemplo.com');
+    expect(user.email).toBe('ana@example.com');
     expect(user.name).toBe('Ana');
     expect(c.cookie).toContain('garaje_session=');
   });
 
-  it('nunca devuelve el hash de la contraseña', async () => {
+  it('never returns the password hash', async () => {
     const { user } = await (await client().register()).json();
     expect(JSON.stringify(user)).not.toContain('scrypt');
     expect(user.passwordHash).toBeUndefined();
   });
 
-  it('marca la cookie como httpOnly', async () => {
+  it('marks the cookie as httpOnly', async () => {
     const res = await client().register();
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
   });
 
-  it('rechaza un correo ya registrado', async () => {
-    await client().register('ana@ejemplo.com');
-    const res = await client().register('ana@ejemplo.com');
+  it('rejects an email that is already registered', async () => {
+    await client().register('ana@example.com');
+    const res = await client().register('ana@example.com');
     expect(res.status).toBe(409);
   });
 
-  it('el correo no distingue mayúsculas', async () => {
-    await client().register('ana@ejemplo.com');
-    const res = await client().register('ANA@Ejemplo.com');
+  it('treats the email as case-insensitive', async () => {
+    await client().register('ana@example.com');
+    const res = await client().register('ANA@Example.com');
     expect(res.status).toBe(409);
   });
 
-  it('rechaza correos y contraseñas inválidos', async () => {
+  it('rejects invalid emails and passwords', async () => {
     const c = client();
-    expect((await c.register('no-es-un-correo')).status).toBe(400);
-    expect((await c.register('b@ejemplo.com', 'corta')).status).toBe(400);
+    expect((await c.register('not-an-email')).status).toBe(400);
+    expect((await c.register('b@example.com', 'short')).status).toBe(400);
   });
 });
 
-describe('inicio de sesión', () => {
-  it('acepta las credenciales correctas', async () => {
-    await client().register('ana@ejemplo.com', 'contraseña-larga');
+describe('sign in', () => {
+  it('accepts valid credentials', async () => {
+    await client().register('ana@example.com', 'a-long-enough-password');
 
     const c = client();
     const res = await c.fetch('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: 'ana@ejemplo.com', password: 'contraseña-larga' }),
+      body: JSON.stringify({ email: 'ana@example.com', password: 'a-long-enough-password' }),
     });
 
     expect(res.status).toBe(200);
     expect(c.cookie).toContain('garaje_session=');
   });
 
-  it('rechaza la contraseña incorrecta', async () => {
-    await client().register('ana@ejemplo.com', 'contraseña-larga');
+  it('rejects a wrong password', async () => {
+    await client().register('ana@example.com', 'a-long-enough-password');
 
     const res = await client().fetch('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: 'ana@ejemplo.com', password: 'otra-cosa-mas' }),
+      body: JSON.stringify({ email: 'ana@example.com', password: 'a-different-password' }),
     });
     expect(res.status).toBe(401);
   });
 
-  it('no revela si un correo está registrado', async () => {
-    await client().register('ana@ejemplo.com', 'contraseña-larga');
+  it('does not reveal whether an email is registered', async () => {
+    await client().register('ana@example.com', 'a-long-enough-password');
 
     const existe = await client().fetch('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: 'ana@ejemplo.com', password: 'incorrecta-1' }),
+      body: JSON.stringify({ email: 'ana@example.com', password: 'wrong-password-1' }),
     });
     const noExiste = await client().fetch('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: 'nadie@ejemplo.com', password: 'incorrecta-1' }),
+      body: JSON.stringify({ email: 'nobody@example.com', password: 'wrong-password-1' }),
     });
 
     expect(existe.status).toBe(noExiste.status);
@@ -161,20 +154,20 @@ describe('inicio de sesión', () => {
   });
 });
 
-describe('sesión', () => {
-  it('/api/auth/me devuelve el usuario actual', async () => {
+describe('session', () => {
+  it('/api/auth/me returns the current user', async () => {
     const c = client();
     await c.register();
 
     const { user } = await (await c.fetch('/api/auth/me')).json();
-    expect(user.email).toBe('ana@ejemplo.com');
+    expect(user.email).toBe('ana@example.com');
   });
 
-  it('/api/auth/me responde 401 sin sesión', async () => {
+  it('/api/auth/me returns 401 without a session', async () => {
     expect((await fetch(base + '/api/auth/me')).status).toBe(401);
   });
 
-  it('cerrar sesión invalida la cookie', async () => {
+  it('signing out clears the cookie', async () => {
     const c = client();
     await c.register();
 
@@ -182,7 +175,7 @@ describe('sesión', () => {
     expect(res.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
-  it('rechaza una cookie con firma inválida', async () => {
+  it('rejects a cookie with an invalid signature', async () => {
     const res = await fetch(base + '/api/garage', {
       headers: { Cookie: 'garaje_session=abc.def.ghi' },
     });
@@ -190,8 +183,8 @@ describe('sesión', () => {
   });
 });
 
-describe('el garaje exige sesión', () => {
-  it('devuelve 401 sin autenticar', async () => {
+describe('the garage requires a session', () => {
+  it('returns 401 when unauthenticated', async () => {
     expect((await fetch(base + '/api/garage')).status).toBe(401);
     expect(
       (await fetch(base + '/api/vehicles', {
@@ -203,52 +196,51 @@ describe('el garaje exige sesión', () => {
   });
 });
 
-describe('aislamiento entre cuentas', () => {
-  it('cada cuenta solo ve sus propios vehículos', async () => {
+describe('isolation between accounts', () => {
+  it('each account only sees its own vehicles', async () => {
     const ana = client();
-    await ana.register('ana@ejemplo.com');
+    await ana.register('ana@example.com');
     await ana.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) });
 
     const luis = client();
-    await luis.register('luis@ejemplo.com');
+    await luis.register('luis@example.com');
 
     expect((await (await luis.fetch('/api/garage')).json()).vehicles).toHaveLength(0);
     expect((await (await ana.fetch('/api/garage')).json()).vehicles).toHaveLength(1);
   });
 
-  it('una cuenta no puede leer ni borrar el vehículo de otra', async () => {
+  it('an account cannot read or delete another account\'s vehicle', async () => {
     const ana = client();
-    await ana.register('ana@ejemplo.com');
+    await ana.register('ana@example.com');
     const car = await (
       await ana.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
     ).json();
 
     const luis = client();
-    await luis.register('luis@ejemplo.com');
+    await luis.register('luis@example.com');
 
     expect((await luis.fetch(`/api/vehicles/${car.id}`)).status).toBe(404);
     expect(
       (await luis.fetch(`/api/vehicles/${car.id}`, { method: 'DELETE' })).status
     ).toBe(404);
 
-    // El vehículo de Ana sigue intacto.
     expect((await (await ana.fetch('/api/garage')).json()).vehicles).toHaveLength(1);
   });
 
-  it('no se puede añadir un registro al vehículo de otra cuenta', async () => {
+  it('cannot add a record to another account\'s vehicle', async () => {
     const ana = client();
-    await ana.register('ana@ejemplo.com');
+    await ana.register('ana@example.com');
     const car = await (
       await ana.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
     ).json();
 
     const luis = client();
-    await luis.register('luis@ejemplo.com');
+    await luis.register('luis@example.com');
 
     const res = await luis.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Intruso',
+        vehicleId: car.id, category: 'oil', title: 'Intruder',
         date: '2026-01-01', mileage: 1000,
       }),
     });
@@ -256,8 +248,8 @@ describe('aislamiento entre cuentas', () => {
   });
 });
 
-describe('vehículos', () => {
-  it('crea y devuelve el vehículo', async () => {
+describe('vehicles', () => {
+  it('creates and returns the vehicle', async () => {
     const c = client();
     await c.register();
 
@@ -266,10 +258,10 @@ describe('vehículos', () => {
 
     const vehicle = await res.json();
     expect(vehicle.id).toBeTruthy();
-    expect(vehicle.nickname).toBe('El coche');
+    expect(vehicle.nickname).toBe('The car');
   });
 
-  it('acumula los errores de validación', async () => {
+  it('collects every validation error', async () => {
     const c = client();
     await c.register();
 
@@ -281,7 +273,7 @@ describe('vehículos', () => {
     expect((await res.json()).details.length).toBeGreaterThan(2);
   });
 
-  it('actualiza el sello de kilometraje solo si cambia', async () => {
+  it('only updates the mileage timestamp when mileage changes', async () => {
     const c = client();
     await c.register();
     const car = await (
@@ -291,7 +283,7 @@ describe('vehículos', () => {
     const igual = await (
       await c.fetch(`/api/vehicles/${car.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ ...CAR, nickname: 'Otro nombre' }),
+        body: JSON.stringify({ ...CAR, nickname: 'Another name' }),
       })
     ).json();
     expect(igual.mileageUpdatedAt).toBe(car.mileageUpdatedAt);
@@ -305,7 +297,7 @@ describe('vehículos', () => {
     expect(distinto.mileageUpdatedAt).not.toBe(car.mileageUpdatedAt);
   });
 
-  it('borrar el vehículo arrastra su historial y sus planes', async () => {
+  it('deleting a vehicle removes its history and plans', async () => {
     const c = client();
     await c.register();
     const car = await (
@@ -315,14 +307,14 @@ describe('vehículos', () => {
     await c.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Aceite',
+        vehicleId: car.id, category: 'oil', title: 'Oil',
         date: '2026-01-01', mileage: 99_000,
       }),
     });
     await c.fetch('/api/plans', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Aceite',
+        vehicleId: car.id, category: 'oil', title: 'Oil',
         intervalKm: 15_000, active: true,
       }),
     });
@@ -336,7 +328,7 @@ describe('vehículos', () => {
   });
 });
 
-describe('registros de mantenimiento', () => {
+describe('maintenance records', () => {
   async function withCar() {
     const c = client();
     await c.register();
@@ -346,13 +338,13 @@ describe('registros de mantenimiento', () => {
     return { c, car };
   }
 
-  it('sube el cuentakilómetros si el registro es más reciente', async () => {
+  it('raises the odometer when the record is more recent', async () => {
     const { c, car } = await withCar();
 
     await c.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Aceite',
+        vehicleId: car.id, category: 'oil', title: 'Oil',
         date: '2026-06-01', mileage: 103_000,
       }),
     });
@@ -361,13 +353,13 @@ describe('registros de mantenimiento', () => {
     expect(snapshot.vehicles[0].mileage).toBe(103_000);
   });
 
-  it('no baja el cuentakilómetros con un mantenimiento antiguo', async () => {
+  it('never lowers the odometer with an older record', async () => {
     const { c, car } = await withCar();
 
     await c.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Antiguo',
+        vehicleId: car.id, category: 'oil', title: 'Older',
         date: '2025-01-01', mileage: 80_000,
       }),
     });
@@ -376,13 +368,13 @@ describe('registros de mantenimiento', () => {
     expect(snapshot.vehicles[0].mileage).toBe(100_000);
   });
 
-  it('cerrar una tarea planificada la reprograma', async () => {
+  it('completing a scheduled task reschedules it', async () => {
     const { c, car } = await withCar();
     const plan = await (
       await c.fetch('/api/plans', {
         method: 'POST',
         body: JSON.stringify({
-          vehicleId: car.id, category: 'oil', title: 'Aceite',
+          vehicleId: car.id, category: 'oil', title: 'Oil',
           intervalKm: 15_000, lastServiceMileage: 90_000, active: true,
         }),
       })
@@ -391,7 +383,7 @@ describe('registros de mantenimiento', () => {
     await c.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Hecho',
+        vehicleId: car.id, category: 'oil', title: 'Done',
         date: '2026-06-01', mileage: 105_000, planId: plan.id,
       }),
     });
@@ -400,14 +392,14 @@ describe('registros de mantenimiento', () => {
     expect(snapshot.plans[0].lastServiceMileage).toBe(105_000);
   });
 
-  it('rechaza un registro para un vehículo inexistente', async () => {
+  it('rejects a record for a vehicle that does not exist', async () => {
     const c = client();
     await c.register();
 
     const res = await c.fetch('/api/records', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: 'no-existe', category: 'oil', title: 'X',
+        vehicleId: 'does-not-exist', category: 'oil', title: 'X',
         date: '2026-01-01', mileage: 1000,
       }),
     });
@@ -415,8 +407,8 @@ describe('registros de mantenimiento', () => {
   });
 });
 
-describe('planes de mantenimiento', () => {
-  it('exige al menos un intervalo', async () => {
+describe('maintenance plans', () => {
+  it('requires at least one interval', async () => {
     const c = client();
     await c.register();
     const car = await (
@@ -426,14 +418,14 @@ describe('planes de mantenimiento', () => {
     const res = await c.fetch('/api/plans', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Sin intervalo', active: true,
+        vehicleId: car.id, category: 'oil', title: 'No interval', active: true,
       }),
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).details.join(' ')).toContain('intervalo');
+    expect((await res.json()).details.join(' ')).toContain('interval');
   });
 
-  it('acepta un plan solo temporal, como la ITV', async () => {
+  it('accepts a time-only plan, such as the annual inspection', async () => {
     const c = client();
     await c.register();
     const car = await (
@@ -451,8 +443,8 @@ describe('planes de mantenimiento', () => {
   });
 });
 
-describe('borrar la cuenta', () => {
-  it('se lleva por delante todo su contenido', async () => {
+describe('deleting the account', () => {
+  it('removes all of its content', async () => {
     const c = client();
     await c.register();
     const car = await (
@@ -461,7 +453,7 @@ describe('borrar la cuenta', () => {
     await c.fetch('/api/plans', {
       method: 'POST',
       body: JSON.stringify({
-        vehicleId: car.id, category: 'oil', title: 'Aceite',
+        vehicleId: car.id, category: 'oil', title: 'Oil',
         intervalKm: 15_000, active: true,
       }),
     });
@@ -469,19 +461,18 @@ describe('borrar la cuenta', () => {
     const res = await c.fetch('/api/account', { method: 'DELETE' });
     expect(res.status).toBe(200);
 
-    // La sesión ya no vale y la cuenta no se puede recuperar.
     expect((await c.fetch('/api/auth/me')).status).toBe(401);
   });
 });
 
-describe('catálogo', () => {
-  it('es público: no necesita sesión', async () => {
+describe('catalog', () => {
+  it('is public: no session required', async () => {
     const res = await fetch(base + '/api/catalog');
     expect(res.status).toBe(200);
     expect((await res.json()).count).toBeGreaterThan(80);
   });
 
-  it('filtra por tipo de vehículo', async () => {
+  it('filters by vehicle type', async () => {
     const res = await fetch(base + '/api/catalog?type=motorcycle');
     const names = (await res.json()).makes.map((m: { name: string }) => m.name);
     expect(names).toContain('Yamaha');
@@ -489,14 +480,14 @@ describe('catálogo', () => {
   });
 });
 
-describe('errores', () => {
-  it('404 en una ruta desconocida', async () => {
+describe('errors', () => {
+  it('404 on an unknown route', async () => {
     const c = client();
     await c.register();
     expect((await c.fetch('/api/nada')).status).toBe(404);
   });
 
-  it('405 con la cabecera Allow', async () => {
+  it('405 with the Allow header', async () => {
     const c = client();
     await c.register();
     const res = await c.fetch('/api/garage', { method: 'DELETE' });
@@ -504,7 +495,7 @@ describe('errores', () => {
     expect(res.headers.get('allow')).toContain('GET');
   });
 
-  it('rechaza un JSON mal formado', async () => {
+  it('rejects malformed JSON', async () => {
     const c = client();
     await c.register();
     const res = await c.fetch('/api/vehicles', { method: 'POST', body: '{roto' });

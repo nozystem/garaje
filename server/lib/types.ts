@@ -1,26 +1,17 @@
 export interface StoredUser {
   id: string;
   email: string;
-  /** Hash de la contraseña. Nunca sale de la API. */
   passwordHash: string;
   name: string;
   createdAt: string;
 }
 
-/** Lo que sí puede ver el cliente. */
 export interface PublicUser {
   id: string;
   email: string;
   name: string;
   createdAt: string;
 }
-
-/**
- * Contrato entre la API y el cliente.
- *
- * La app vive en `src/`, el servidor en `server/`. Estos tipos describen lo
- * que viaja por la red y se mantienen alineados con `src/app/core/models/`.
- */
 
 export interface StoredVehicle {
   id: string;
@@ -71,7 +62,6 @@ export interface StoredPlan {
   createdAt: string;
 }
 
-/** Todo el garaje en una respuesta: la app lo pide una vez y trabaja en local. */
 export interface GarageSnapshot {
   vehicles: StoredVehicle[];
   records: StoredRecord[];

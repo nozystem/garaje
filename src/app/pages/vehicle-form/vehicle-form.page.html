@@ -1,26 +1,24 @@
 <ion-header [translucent]="true" class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button text="Atrás" defaultHref="/garaje"></ion-back-button>
+      <ion-back-button text="Back" defaultHref="/garaje"></ion-back-button>
     </ion-buttons>
-    <ion-title>{{ editingId() ? 'Editar' : 'Nuevo vehículo' }}</ion-title>
+    <ion-title>{{ editingId() ? 'Edit' : 'New vehicle' }}</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <form [formGroup]="form" (ngSubmit)="save()" novalidate>
 
-    <!-- Vista previa: refleja en vivo lo que se va escribiendo. -->
     <div class="preview" [style.--accent]="form.value.color">
       <div class="preview__glow"></div>
 
-      <!-- El propio distintivo es el selector de foto. -->
       <button
         type="button"
         class="preview__badge"
         [class.preview__badge--photo]="form.value.photo"
         (click)="pickPhoto()"
-        [attr.aria-label]="form.value.photo ? 'Cambiar la foto' : 'Añadir una foto'"
+        [attr.aria-label]="form.value.photo ? 'Change the photo' : 'Add a photo'"
       >
         @if (form.value.photo) {
           <img [src]="form.value.photo" alt="" />
@@ -51,7 +49,7 @@
         (change)="onPhotoSelected($event)"
       />
       <h2 class="preview__name">
-        {{ form.value.nickname || 'Tu vehículo' }}
+        {{ form.value.nickname || 'Your vehicle' }}
       </h2>
       <p class="preview__model">
         @if (form.value.make || form.value.model) {
@@ -67,8 +65,7 @@
 
     <div class="body">
 
-      <!-- Tipo: tarjetas grandes en vez de un segmento pequeño. -->
-      <h3 class="group">¿Qué es?</h3>
+      <h3 class="group">What is it?</h3>
       <div class="types">
         @for (option of typeOptions; track option.value) {
           <button
@@ -84,7 +81,7 @@
       </div>
 
       <h3 class="group">
-        Identificación
+        Details
         @if (catalog.loading()) {
           <ion-spinner name="dots" class="group__spinner"></ion-spinner>
         }
@@ -93,43 +90,42 @@
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-input
-            label="Nombre"
+            label="Name"
             labelPlacement="floating"
             formControlName="nickname"
-            placeholder="El coche de diario"
+            placeholder="Daily driver"
           ></ion-input>
         </ion-item>
         @if (invalid('nickname')) {
-          <p class="error">Ponle un nombre para reconocerlo</p>
+          <p class="error">Give it a name you will recognise</p>
         }
 
         <div class="divider"></div>
 
-        <!-- Marca y modelo vienen de /api/catalog, con texto libre de reserva. -->
         <ion-item lines="none" class="field">
           <ion-select
-            label="Marca"
+            label="Make"
             labelPlacement="floating"
             formControlName="make"
-            placeholder="Elige una marca"
+            placeholder="Choose a make"
             (ionChange)="onMakeChange($any($event.detail.value))"
-            [interfaceOptions]="{ header: 'Marca' }"
+            [interfaceOptions]="{ header: 'Make' }"
           >
             @for (make of availableMakes(); track make.slug) {
               <ion-select-option [value]="make.name">{{ make.name }}</ion-select-option>
             }
-            <ion-select-option value="Otra">Otra…</ion-select-option>
+            <ion-select-option value="Otra">Other…</ion-select-option>
           </ion-select>
         </ion-item>
         @if (invalid('make')) {
-          <p class="error">Elige la marca</p>
+          <p class="error">Choose the make</p>
         }
 
         @if (selectedMake() === 'Otra') {
           <div class="divider"></div>
           <ion-item lines="none" class="field">
             <ion-input
-              label="¿Qué marca?"
+              label="Which make?"
               labelPlacement="floating"
               formControlName="make"
             ></ion-input>
@@ -141,30 +137,30 @@
         @if (availableModels().length) {
           <ion-item lines="none" class="field">
             <ion-select
-              label="Modelo"
+              label="Model"
               labelPlacement="floating"
               formControlName="model"
-              placeholder="Elige un modelo"
-              [interfaceOptions]="{ header: 'Modelo' }"
+              placeholder="Choose a model"
+              [interfaceOptions]="{ header: 'Model' }"
             >
               @for (model of availableModels(); track model) {
                 <ion-select-option [value]="model">{{ model }}</ion-select-option>
               }
-              <ion-select-option value="Otro">Otro…</ion-select-option>
+              <ion-select-option value="Otro">Other…</ion-select-option>
             </ion-select>
           </ion-item>
         } @else {
           <ion-item lines="none" class="field">
             <ion-input
-              label="Modelo"
+              label="Model"
               labelPlacement="floating"
               formControlName="model"
-              placeholder="Escríbelo"
+              placeholder="Type it in"
             ></ion-input>
           </ion-item>
         }
         @if (invalid('model')) {
-          <p class="error">Indica el modelo</p>
+          <p class="error">Enter the model</p>
         }
 
         <div class="divider"></div>
@@ -172,7 +168,7 @@
         <div class="row">
           <ion-item lines="none" class="field field--half">
             <ion-input
-              label="Año"
+              label="Year"
               labelPlacement="floating"
               type="number"
               inputmode="numeric"
@@ -182,7 +178,7 @@
           <div class="row__sep"></div>
           <ion-item lines="none" class="field field--half">
             <ion-input
-              label="Matrícula"
+              label="Plate"
               labelPlacement="floating"
               formControlName="plate"
               class="uppercase"
@@ -191,8 +187,7 @@
         </div>
       </div>
 
-      <!-- Combustible: iconos, no un desplegable. -->
-      <h3 class="group">Combustible</h3>
+      <h3 class="group">Fuel</h3>
       <div class="fuels">
         @for (fuel of fuelOptions; track fuel.value) {
           <button
@@ -207,11 +202,11 @@
         }
       </div>
 
-      <h3 class="group">Kilometraje</h3>
+      <h3 class="group">Mileage</h3>
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-input
-            label="Kilómetros actuales"
+            label="Current mileage"
             labelPlacement="floating"
             type="number"
             inputmode="numeric"
@@ -220,28 +215,28 @@
           <span slot="end" class="unit">km</span>
         </ion-item>
         @if (invalid('mileage')) {
-          <p class="error">Indica el kilometraje</p>
+          <p class="error">Enter the mileage</p>
         }
 
         <div class="divider"></div>
 
         <ion-item lines="none" class="field">
           <ion-input
-            label="Kilómetros al mes"
+            label="Kilometres per month"
             labelPlacement="floating"
             type="number"
             inputmode="numeric"
             formControlName="monthlyMileage"
           ></ion-input>
-          <span slot="end" class="unit">km/mes</span>
+          <span slot="end" class="unit">km/month</span>
         </ion-item>
         <p class="hint">
           <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-          Con esto se calcula cuándo vencerá cada mantenimiento.
+          Used to estimate when each service falls due.
         </p>
       </div>
 
-      <h3 class="group">Color</h3>
+      <h3 class="group">Colour</h3>
       <div class="colors">
         @for (color of colors; track color) {
           <button
@@ -259,12 +254,12 @@
         }
       </div>
 
-      <h3 class="group">Notas</h3>
+      <h3 class="group">Notes</h3>
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-textarea
             formControlName="notes"
-            placeholder="Lo que quieras recordar de este vehículo"
+            placeholder="Anything you want to remember"
             [autoGrow]="true"
             rows="3"
           ></ion-textarea>
@@ -281,7 +276,7 @@
           <ion-spinner name="crescent"></ion-spinner>
         } @else {
           <ion-icon slot="start" [name]="editingId() ? 'save-outline' : 'add-outline'"></ion-icon>
-          {{ editingId() ? 'Guardar cambios' : 'Añadir al garaje' }}
+          {{ editingId() ? 'Save changes' : 'Add to garage' }}
         }
       </ion-button>
     </div>

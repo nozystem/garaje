@@ -1,8 +1,8 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>Mi garaje</ion-title>
+    <ion-title>My garage</ion-title>
     <ion-buttons slot="end">
-      <ion-button routerLink="/ajustes" aria-label="Ajustes">
+      <ion-button routerLink="/settings" aria-label="Settings">
         <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -16,20 +16,20 @@
 
   <ion-header collapse="condense">
     <ion-toolbar>
-      <ion-title size="large">Mi garaje</ion-title>
+      <ion-title size="large">My garage</ion-title>
     </ion-toolbar>
   </ion-header>
 
   @if (store.loading() && !store.loaded()) {
     <div class="centered">
       <ion-spinner></ion-spinner>
-      <p>Cargando tu garaje…</p>
+      <p>Loading your garage…</p>
     </div>
   } @else if (store.error()) {
     <ion-card class="state state--error">
       <ion-card-content>
         <ion-icon name="alert-circle-outline" color="danger"></ion-icon>
-        <h2>No se ha podido cargar</h2>
+        <h2>Could not load</h2>
         <p>{{ store.error() }}</p>
         <ion-button fill="outline" size="small" (click)="store.load(true)">
           Reintentar
@@ -41,11 +41,11 @@
     @if (!hasVehicles()) {
       <div class="empty">
         <ion-icon name="car-outline"></ion-icon>
-        <h2>Tu garaje está vacío</h2>
-        <p>Añade tu primer vehículo para empezar a llevar su mantenimiento.</p>
-        <ion-button routerLink="/vehiculo/nuevo">
+        <h2>Your garage is empty</h2>
+        <p>Add your first vehicle to start tracking its maintenance.</p>
+        <ion-button routerLink="/vehicle/nuevo">
           <ion-icon slot="start" name="add-outline"></ion-icon>
-          Añadir vehículo
+          Add vehicle
         </ion-button>
       </div>
     } @else {
@@ -54,7 +54,7 @@
         <section class="section">
           <h2 class="section__title">
             <ion-icon name="alert-circle-outline" color="danger"></ion-icon>
-            Necesita atención
+            Needs attention
           </h2>
           <ion-list class="section__list" [inset]="true">
             @for (alert of store.alerts(); track alert.plan.id) {
@@ -71,8 +71,8 @@
         <ion-card class="state state--ok">
           <ion-card-content>
             <ion-icon name="checkmark-circle-outline" color="success"></ion-icon>
-            <h2>Todo al día</h2>
-            <p>No hay mantenimientos pendientes ahora mismo.</p>
+            <h2>All up to date</h2>
+            <p>Nothing is due right now.</p>
           </ion-card-content>
         </ion-card>
       }
@@ -80,7 +80,7 @@
       <section class="section">
         <h2 class="section__title">
           <ion-icon name="car-outline"></ion-icon>
-          Vehículos
+          Vehicles
         </h2>
         @for (vehicle of store.vehicles(); track vehicle.id) {
           <app-vehicle-card
@@ -98,7 +98,7 @@
 
 @if (hasVehicles()) {
   <ion-fab slot="fixed" vertical="bottom" horizontal="end">
-    <ion-fab-button routerLink="/vehiculo/nuevo" aria-label="Añadir vehículo">
+    <ion-fab-button routerLink="/vehicle/nuevo" aria-label="Add vehicle">
       <ion-icon name="add-outline"></ion-icon>
     </ion-fab-button>
   </ion-fab>

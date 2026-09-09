@@ -14,11 +14,6 @@ import type { PublicUser, StoredUser } from './types.ts';
 
 const COOKIE = 'garaje_session';
 
-/**
- * La sesión viaja en una cookie httpOnly, no en localStorage: así el token no
- * es accesible desde JavaScript y un XSS no puede robarlo. SameSite=Lax evita
- * que se envíe en peticiones desde otros sitios.
- */
 function sessionCookie(token: string, maxAge: number): string {
   const parts = [
     `${COOKIE}=${token}`,
@@ -27,7 +22,6 @@ function sessionCookie(token: string, maxAge: number): string {
     'SameSite=Lax',
     `Max-Age=${maxAge}`,
   ];
-  // En producción la cookie solo debe viajar por HTTPS.
   if (process.env['NODE_ENV'] === 'production') parts.push('Secure');
   return parts.join('; ');
 }
@@ -43,14 +37,12 @@ function tokenFrom(req: IncomingMessage): string | null {
   return null;
 }
 
-/** Id del usuario autenticado, o null si la sesión no es válida. */
 export function userIdFrom(req: IncomingMessage): string | null {
   const token = tokenFrom(req);
   return token ? verifyToken(token) : null;
 }
 
 function toPublic(user: StoredUser): PublicUser {
-  // El hash de la contraseña nunca sale de la API.
   return {
     id: user.id,
     email: user.email,
@@ -82,16 +74,16 @@ function readCredentials(
   const name = typeof data['name'] === 'string' ? data['name'].trim() : '';
 
   if (!EMAIL.test(email) || email.length > 254) {
-    errors.push('El correo no es válido');
+    errors.push('Invalid email address');
   }
   if (password.length < MIN_PASSWORD) {
-    errors.push(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`);
+    errors.push(`Password must be at least ${MIN_PASSWORD} characters`);
   }
   if (password.length > 200) {
-    errors.push('La contraseña es demasiado larga');
+    errors.push('Password is too long');
   }
   if (withName && (name.length < 2 || name.length > 60)) {
-    errors.push('El nombre debe tener entre 2 y 60 caracteres');
+    errors.push('Name must be between 2 and 60 characters');
   }
 
   if (errors.length) return { ok: false, errors };
@@ -117,7 +109,7 @@ export async function handleRegister(
   const { email, password, name } = parsed.value;
 
   if (await findUserByEmail(email)) {
-    return json(res, 409, { error: 'Ya existe una cuenta con ese correo' });
+    return json(res, 409, { error: 'An account with that email already exists' });
   }
 
   const user: StoredUser = {
@@ -131,8 +123,7 @@ export async function handleRegister(
   try {
     await createUser(user);
   } catch {
-    // El índice único puede saltar si dos registros llegan a la vez.
-    return json(res, 409, { error: 'Ya existe una cuenta con ese correo' });
+    return json(res, 409, { error: 'An account with that email already exists' });
   }
 
   res.setHeader('Set-Cookie', sessionCookie(issueToken(user.id), TOKEN_MAX_AGE_SECONDS));
@@ -155,14 +146,10 @@ export async function handleLogin(
 
   const user = await findUserByEmail(parsed.value.email);
 
-  // Mismo mensaje tanto si el correo no existe como si la contraseña falla:
-  // distinguirlos permitiría averiguar qué correos están registrados.
   const invalid = () =>
-    json(res, 401, { error: 'Correo o contraseña incorrectos' });
+    json(res, 401, { error: 'Incorrect email or password' });
 
   if (!user) {
-    // Se calcula un hash igualmente para que el tiempo de respuesta no
-    // delate si el correo existe.
     await hashPassword(parsed.value.password);
     return invalid();
   }
@@ -185,13 +172,12 @@ export async function handleMe(
   res: ServerResponse
 ): Promise<void> {
   const userId = userIdFrom(req);
-  if (!userId) return json(res, 401, { error: 'No has iniciado sesión' });
+  if (!userId) return json(res, 401, { error: 'Not signed in' });
 
   const user = await findUserById(userId);
   if (!user) {
-    // La cuenta se borró pero el token sigue vivo: se cierra la sesión.
     res.setHeader('Set-Cookie', sessionCookie('', 0));
-    return json(res, 401, { error: 'La cuenta ya no existe' });
+    return json(res, 401, { error: 'This account no longer exists' });
   }
 
   json(res, 200, { user: toPublic(user) });

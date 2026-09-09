@@ -22,13 +22,6 @@ import {
   StatusLabelPipe,
 } from './status.pipe';
 
-/**
- * Una tarea de mantenimiento con su estado.
- *
- * Muestra el criterio que manda (kilómetros o tiempo) porque es la
- * información que decide si hay que ir al taller: no es lo mismo que falten
- * 500 km que que falten dos meses.
- */
 @Component({
   selector: 'app-plan-status-card',
   templateUrl: './plan-status-card.component.html',
@@ -56,14 +49,12 @@ export class PlanStatusCardComponent {
   readonly status = input.required<PlanStatus>();
   readonly showVehicle = input(false);
   readonly vehicleName = input<string>('');
-  /** En la portada no se editan tareas: solo desde la ficha del vehículo. */
   readonly editable = input(false);
 
   readonly complete = output<PlanStatus>();
   readonly edit = output<PlanStatus>();
   readonly remove = output<PlanStatus>();
 
-  /** La barra se llena a tope aunque el plan esté pasado de largo. */
   get progressValue(): number {
     return Math.min(1, this.status().progress);
   }
@@ -73,27 +64,27 @@ export class PlanStatusCardComponent {
 
     if (s.limitingFactor === 'km' && s.kmRemaining !== undefined) {
       return s.kmRemaining < 0
-        ? `Pasado ${this.formatKm(-s.kmRemaining)}`
-        : `Faltan ${this.formatKm(s.kmRemaining)}`;
+        ? `${this.formatKm(-s.kmRemaining)} over`
+        : `${this.formatKm(s.kmRemaining)} left`;
     }
 
     if (s.limitingFactor === 'time' && s.daysRemaining !== undefined) {
       return s.daysRemaining < 0
-        ? `Vencido hace ${this.formatDays(-s.daysRemaining)}`
-        : `Faltan ${this.formatDays(s.daysRemaining)}`;
+        ? `Overdue by ${this.formatDays(-s.daysRemaining)}`
+        : `${this.formatDays(s.daysRemaining)} left`;
     }
 
-    return 'Sin vencimiento';
+    return 'No due date';
   }
 
   private formatKm(km: number): string {
-    return new Intl.NumberFormat('es-ES').format(Math.round(km)) + ' km';
+    return new Intl.NumberFormat('en-GB').format(Math.round(km)) + ' km';
   }
 
   private formatDays(days: number): string {
     const d = Math.round(days);
-    if (d < 31) return `${d} día${d === 1 ? '' : 's'}`;
+    if (d < 31) return `${d} day${d === 1 ? '' : 's'}`;
     const months = Math.round(d / 30.44);
-    return `${months} mes${months === 1 ? '' : 'es'}`;
+    return `${months} month${months === 1 ? '' : 's'}`;
   }
 }

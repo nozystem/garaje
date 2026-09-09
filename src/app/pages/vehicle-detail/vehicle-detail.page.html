@@ -1,11 +1,11 @@
 <ion-header [translucent]="true" class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button text="Atrás" defaultHref="/garaje"></ion-back-button>
+      <ion-back-button text="Back" defaultHref="/garaje"></ion-back-button>
     </ion-buttons>
     <ion-title>{{ vehicle()?.nickname }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button [routerLink]="['/vehiculo', vehicleId(), 'editar']" aria-label="Editar">
+      <ion-button [routerLink]="['/vehiculo', vehicleId(), 'editar']" aria-label="Edit">
         <ion-icon slot="icon-only" name="create-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -15,7 +15,6 @@
 <ion-content [fullscreen]="true">
   @if (vehicle(); as v) {
 
-    <!-- Cabecera: la foto manda si la hay; si no, el color del vehículo. -->
     <header class="hero" [style.--accent]="v.color || 'var(--ion-color-primary)'">
       @if (v.photo) {
         <img class="hero__photo" [src]="v.photo" [alt]="v.nickname" />
@@ -38,35 +37,34 @@
       </div>
     </header>
 
-    <!-- Cifras de un vistazo. -->
     <div class="stats">
       <div class="stat">
         <ion-icon name="speedometer-outline" aria-hidden="true"></ion-icon>
         <span class="stat__value">{{ v.mileage | km }}</span>
-        <span class="stat__label">Kilometraje</span>
+        <span class="stat__label">Mileage</span>
       </div>
       <div class="stat" [class.stat--alert]="overdue() > 0">
         <ion-icon
           [name]="overdue() ? 'alert-circle-outline' : 'checkmark-circle-outline'"
           aria-hidden="true"
         ></ion-icon>
-        <span class="stat__value">{{ overdue() || 'Al día' }}</span>
-        <span class="stat__label">{{ overdue() ? 'Vencidos' : 'Estado' }}</span>
+        <span class="stat__value">{{ overdue() || 'Up to date' }}</span>
+        <span class="stat__label">{{ overdue() ? 'Overdue' : 'Status' }}</span>
       </div>
       <div class="stat">
         <ion-icon name="cash-outline" aria-hidden="true"></ion-icon>
         <span class="stat__value">{{ totalSpent() ? (totalSpent() + ' €') : '—' }}</span>
-        <span class="stat__label">Gastado</span>
+        <span class="stat__label">Spent</span>
       </div>
     </div>
 
     <div class="body">
       <ion-segment [value]="tab()" (ionChange)="tab.set($any($event.detail.value))">
         <ion-segment-button value="plans">
-          <ion-label>Mantenimiento</ion-label>
+          <ion-label>Maintenance</ion-label>
         </ion-segment-button>
         <ion-segment-button value="history">
-          <ion-label>Historial</ion-label>
+          <ion-label>History</ion-label>
         </ion-segment-button>
       </ion-segment>
 
@@ -86,14 +84,14 @@
         } @else {
           <div class="empty">
             <ion-icon name="construct-outline"></ion-icon>
-            <h2>Sin mantenimientos configurados</h2>
-            <p>Añade las tareas que quieras seguir: aceite, frenos, ITV…</p>
+            <h2>No maintenance set up yet</h2>
+            <p>Add the tasks you want to track: oil, brakes, inspection…</p>
           </div>
         }
 
         <ion-button expand="block" fill="outline" class="add" (click)="openPlanForm()">
           <ion-icon slot="start" name="add-outline"></ion-icon>
-          Añadir mantenimiento
+          Add maintenance
         </ion-button>
       } @else {
         @if (records().length) {
@@ -123,7 +121,7 @@
                     size="small"
                     color="medium"
                     (click)="deleteRecord(record.id)"
-                    [attr.aria-label]="'Borrar ' + record.title"
+                    [attr.aria-label]="'Delete ' + record.title"
                   >
                     <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
                   </ion-button>
@@ -134,14 +132,14 @@
         } @else {
           <div class="empty">
             <ion-icon name="time-outline"></ion-icon>
-            <h2>Todavía sin historial</h2>
-            <p>Cuando registres un mantenimiento aparecerá aquí.</p>
+            <h2>No history yet</h2>
+            <p>Once you log a service it will show up here.</p>
           </div>
         }
       }
 
       @if (v.notes) {
-        <h3 class="group">Notas</h3>
+        <h3 class="group">Notes</h3>
         <div class="notes">{{ v.notes }}</div>
       }
 
@@ -153,7 +151,7 @@
         (click)="confirmDelete()"
       >
         <ion-icon slot="start" name="trash-outline"></ion-icon>
-        Borrar vehículo
+        Delete vehicle
       </ion-button>
     </div>
     <ion-modal

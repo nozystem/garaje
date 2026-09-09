@@ -6,24 +6,9 @@ import type {
   StoredVehicle,
 } from './types.ts';
 
-/**
- * Acceso a la base de datos.
- *
- * Desde que la app tiene cuentas, PostgreSQL es obligatorio: los usuarios
- * deben persistir entre reinicios y ser los mismos desde cualquier
- * dispositivo. El modo en memoria de la versión anterior ya no tiene sentido.
- */
-
 let pool: import('pg').Pool | null = null;
 let schemaReady = false;
 
-/**
- * Decide si la conexión debe ir cifrada.
- *
- * Los proveedores en la nube exigen SSL, pero un Postgres local no lo soporta
- * y la conexión falla con "The server does not support SSL connections". Se
- * decide por el destino en vez de forzarlo siempre.
- */
 export function sslFor(url: string): false | { rejectUnauthorized: boolean } {
   const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//.test(url);
   const wantsNoSsl = /[?&]sslmode=disable/.test(url);
@@ -35,7 +20,7 @@ export async function getPool(): Promise<import('pg').Pool> {
 
   if (!url) {
     throw new Error(
-      'Falta POSTGRES_URL. La aplicación necesita una base de datos para las cuentas.'
+      'POSTGRES_URL is missing. The application needs a database for accounts.'
     );
   }
 
@@ -44,7 +29,7 @@ export async function getPool(): Promise<import('pg').Pool> {
     pool = new Pool({
       connectionString: url,
       ssl: sslFor(url),
-      max: 1, // Serverless: una conexión por instancia; el pooler hace el resto.
+      max: 1,
     });
   }
 
@@ -55,13 +40,6 @@ export async function getPool(): Promise<import('pg').Pool> {
   return pool;
 }
 
-/**
- * Crea el esquema si no existe.
- *
- * Las claves foráneas con ON DELETE CASCADE hacen que borrar una cuenta o un
- * vehículo se lleve por delante lo que cuelga de él, sin depender de que la
- * aplicación se acuerde de hacerlo.
- */
 async function ensureSchema(p: import('pg').Pool): Promise<void> {
   await p.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -133,7 +111,6 @@ export async function findUserById(id: string): Promise<StoredUser | null> {
 
 export async function deleteUser(id: string): Promise<void> {
   const p = await getPool();
-  // Las claves foráneas se llevan vehículos, planes y registros.
   await p.query('DELETE FROM users WHERE id = $1', [id]);
 }
 
@@ -149,7 +126,6 @@ function toUser(row: Record<string, unknown>): StoredUser {
 
 /* --- Garaje ---------------------------------------------------------------- */
 
-/** Cierra el pool. Solo lo necesitan los tests al terminar. */
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();
@@ -227,7 +203,6 @@ export async function remove(
   return (result.rowCount ?? 0) > 0;
 }
 
-/** Borrar el vehículo arrastra su historial y sus planes por clave foránea. */
 export async function removeVehicleCascade(
   userId: string,
   vehicleId: string
