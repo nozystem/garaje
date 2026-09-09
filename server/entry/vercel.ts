@@ -22,11 +22,6 @@ export default async function handler(
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
     }
-    res.end(
-      JSON.stringify({
-        error: 'Internal server error',
-        detail: error instanceof Error ? error.message : String(error),
-      })
-    );
+    res.end(JSON.stringify({ error: 'Internal server error' }));
   }
 }
