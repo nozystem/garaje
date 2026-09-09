@@ -113,10 +113,14 @@ export async function handleRequest(
   const [resource, id] = segments;
 
   switch (resource) {
-    case 'garage':
+    case 'garage': {
       if (method !== 'GET') return methodNotAllowed(res, ['GET']);
-      json(res, 200, await loadSnapshot(userId));
+
+      const snapshot = await loadSnapshot(userId);
+      await backfillStockImages(userId, snapshot.vehicles);
+      json(res, 200, snapshot);
       return;
+    }
 
     case 'account':
       if (method !== 'DELETE') return methodNotAllowed(res, ['DELETE']);
@@ -317,4 +321,22 @@ async function handlePlans(
   }
 
   methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+async function backfillStockImages(
+  userId: string,
+  vehicles: StoredVehicle[]
+): Promise<void> {
+  const pending = vehicles.filter((v) => !v.stockImage);
+  if (!pending.length) return;
+
+  await Promise.all(
+    pending.map(async (vehicle) => {
+      const url = await stockImageUrl(vehicle);
+      if (!url) return;
+
+      vehicle.stockImage = url;
+      await upsert('vehicles', userId, vehicle.id, vehicle);
+    })
+  );
 }
