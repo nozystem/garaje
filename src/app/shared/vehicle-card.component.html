@@ -6,7 +6,11 @@
 >
   <ion-card-content class="vehicle__content">
     <div class="vehicle__icon">
-      <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
+      @if (vehicle().photo || vehicle().stockImage) {
+        <img [src]="vehicle().photo || vehicle().stockImage" alt="" />
+      } @else {
+        <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
+      }
     </div>
 
     <div class="vehicle__info">

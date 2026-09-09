@@ -502,3 +502,33 @@ describe('errors', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('stock vehicle image', () => {
+  it('stores no image when the service is not configured', async () => {
+    const c = client();
+    await c.register();
+
+    const car = await (
+      await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
+    ).json();
+
+    expect(car.stockImage).toBeUndefined();
+  });
+
+  it('keeps the stored image when only the mileage changes', async () => {
+    const c = client();
+    await c.register();
+    const car = await (
+      await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
+    ).json();
+
+    const updated = await (
+      await c.fetch(`/api/vehicles/${car.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...CAR, mileage: 150_000 }),
+      })
+    ).json();
+
+    expect(updated.stockImage).toBe(car.stockImage);
+  });
+});

@@ -17,6 +17,7 @@ import {
   userIdFrom,
 } from './auth.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
+import { stockImageUrl } from './vehicle-image.ts';
 import {
   deleteUser,
   findById,
@@ -156,6 +157,7 @@ async function handleVehicles(
       ...parsed.value,
       id: newId(),
       userId,
+      stockImage: (await stockImageUrl(parsed.value)) ?? undefined,
       mileageUpdatedAt: now,
       createdAt: now,
     };
@@ -177,9 +179,18 @@ async function handleVehicles(
     const parsed = validateVehicle(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
 
+    const identityChanged =
+      parsed.value.make !== existing.make ||
+      parsed.value.model !== existing.model ||
+      parsed.value.year !== existing.year ||
+      parsed.value.type !== existing.type;
+
     const updated: StoredVehicle = {
       ...existing,
       ...parsed.value,
+      stockImage: identityChanged
+        ? ((await stockImageUrl(parsed.value)) ?? undefined)
+        : existing.stockImage,
       mileageUpdatedAt:
         parsed.value.mileage !== existing.mileage
           ? new Date().toISOString()

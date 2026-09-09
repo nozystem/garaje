@@ -25,9 +25,13 @@
 
       <div class="hero__body">
         @if (!v.photo) {
-          <div class="hero__badge">
-            <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
-          </div>
+          @if (v.stockImage) {
+            <img class="hero__stock" [src]="v.stockImage" [alt]="v.make + ' ' + v.model" />
+          } @else {
+            <div class="hero__badge">
+              <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
+            </div>
+          }
         }
         <h1 class="hero__name">{{ v.nickname }}</h1>
         <p class="hero__model">{{ v.make }} {{ v.model }} · {{ v.year }}</p>

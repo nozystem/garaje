@@ -483,6 +483,52 @@ function makesForType(type) {
   })).filter((make) => make.models.length > 0);
 }
 
+// server/lib/vehicle-image.ts
+var cache2 = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 6 * 60 * 60 * 1e3;
+var MISS_TTL_MS = 24 * 60 * 60 * 1e3;
+var REQUEST_TIMEOUT_MS = 6e3;
+function keyOf(q) {
+  return `${q.type}|${q.make}|${q.model}|${q.year}`.toLowerCase();
+}
+async function stockImageUrl(q) {
+  const apiKey = process.env["CAR_IMAGES_API_KEY"];
+  if (!apiKey) return null;
+  const key = keyOf(q);
+  const hit = cache2.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.url;
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    make: q.make,
+    model: q.model,
+    year: String(q.year),
+    type: q.type === "motorcycle" ? "moto" : "car"
+  });
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const res = await fetch(
+      `https://carimagesapi.com/api/v1/signed-url?${params}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) {
+      cache2.set(key, { url: null, expiresAt: Date.now() + MISS_TTL_MS });
+      return null;
+    }
+    const body = await res.json();
+    const url = typeof body.url === "string" ? body.url : null;
+    cache2.set(key, {
+      url,
+      expiresAt: Date.now() + (url ? CACHE_TTL_MS : MISS_TTL_MS)
+    });
+    return url;
+  } catch {
+    cache2.set(key, { url: null, expiresAt: Date.now() + MISS_TTL_MS });
+    return null;
+  }
+}
+
 // server/lib/validate.ts
 var VEHICLE_TYPES = ["car", "motorcycle", "van"];
 var FUEL_TYPES = ["gasoline", "diesel", "electric", "hybrid"];
@@ -729,6 +775,7 @@ async function handleVehicles(res, method, userId, id, body) {
       ...parsed.value,
       id: newId(),
       userId,
+      stockImage: await stockImageUrl(parsed.value) ?? void 0,
       mileageUpdatedAt: now,
       createdAt: now
     };
@@ -745,9 +792,11 @@ async function handleVehicles(res, method, userId, id, body) {
   if (method === "PUT") {
     const parsed = validateVehicle(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
+    const identityChanged = parsed.value.make !== existing.make || parsed.value.model !== existing.model || parsed.value.year !== existing.year || parsed.value.type !== existing.type;
     const updated = {
       ...existing,
       ...parsed.value,
+      stockImage: identityChanged ? await stockImageUrl(parsed.value) ?? void 0 : existing.stockImage,
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
     await upsert("vehicles", userId, id, updated);
