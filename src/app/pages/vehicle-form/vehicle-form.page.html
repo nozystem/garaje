@@ -1,9 +1,9 @@
 <ion-header [translucent]="true" class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button text="Back" defaultHref="/garage"></ion-back-button>
+      <ion-back-button [text]="'common.back' | t" defaultHref="/garage"></ion-back-button>
     </ion-buttons>
-    <ion-title>{{ editingId() ? 'Edit' : 'New vehicle' }}</ion-title>
+    <ion-title>{{ (editingId() ? 'form.editTitle' : 'form.newTitle') | t }}</ion-title>
   </ion-toolbar>
 </ion-header>
 
@@ -23,7 +23,7 @@
             [alt]="form.value.make + ' ' + form.value.model"
             (missing)="missingIllustration.set($event)"
           ></app-car-illustration>
-          <button type="button" class="preview__add preview__add--art" (click)="pickPhoto()" aria-label="Add a photo">
+          <button type="button" class="preview__add preview__add--art" (click)="pickPhoto()" [attr.aria-label]="'form.addPhoto' | t">
             <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
           </button>
         </div>
@@ -33,7 +33,7 @@
           class="preview__badge"
           [class.preview__badge--photo]="form.value.photo"
           (click)="pickPhoto()"
-          [attr.aria-label]="form.value.photo ? 'Change the photo' : 'Add a photo'"
+          [attr.aria-label]="(form.value.photo ? 'form.changePhoto' : 'form.addPhoto') | t"
         >
           @if (form.value.photo) {
             <img [src]="form.value.photo" alt="" />
@@ -57,7 +57,7 @@
       }
 
       <!-- Justo debajo del coche, para ver cómo cambia al elegir. -->
-      <div class="colors" role="group" aria-label="Colour">
+      <div class="colors" role="group" [attr.aria-label]="'form.colour' | t">
         @for (color of colors; track color) {
           <button
             type="button"
@@ -66,7 +66,7 @@
             [class.colors__dot--light]="isLight(color)"
             [style.background]="color"
             (click)="form.patchValue({ color })"
-            [attr.aria-label]="'Color ' + color"
+            [attr.aria-label]="'form.colourNamed' | t: { hex: color }"
           >
             @if (form.value.color === color) {
               <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
@@ -78,7 +78,7 @@
           class="colors__dot colors__dot--custom"
           [class.colors__dot--active]="customColor()"
           [style.--custom]="customColor() ? form.value.color : null"
-          aria-label="Other colour"
+          [attr.aria-label]="'form.otherColour' | t"
         >
           <input
             type="color"
@@ -95,7 +95,7 @@
 
       @if (form.value.photo) {
         <button type="button" class="preview__remove" (click)="removePhoto()">
-          Quitar foto
+          {{ 'form.removePhoto' | t }}
         </button>
       }
 
@@ -107,13 +107,13 @@
         (change)="onPhotoSelected($event)"
       />
       <h2 class="preview__name">
-        {{ form.value.nickname || 'Your vehicle' }}
+        {{ form.value.nickname || ('form.yourVehicle' | t) }}
       </h2>
       <p class="preview__model">
         @if (form.value.make || form.value.model) {
           {{ form.value.make }} {{ form.value.model }}
         } @else {
-          Elige marca y modelo
+          {{ 'form.pickMakeModel' | t }}
         }
       </p>
       @if (form.value.plate) {
@@ -124,7 +124,7 @@
     <div class="body">
 
       <h3 class="group">
-        Details
+        {{ 'form.details' | t }}
         @if (catalog.loading()) {
           <ion-spinner name="dots" class="group__spinner"></ion-spinner>
         }
@@ -133,14 +133,14 @@
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-input
-            label="Name"
+            [label]="'form.name' | t"
             labelPlacement="floating"
             formControlName="nickname"
-            placeholder="Daily driver"
+            [placeholder]="'form.namePlaceholder' | t"
           ></ion-input>
         </ion-item>
         @if (invalid('nickname')) {
-          <p class="error">Give it a name you will recognise</p>
+          <p class="error">{{ 'form.nameError' | t }}</p>
         }
 
         <div class="divider"></div>
@@ -161,24 +161,24 @@
             ></app-make-logo>
           }
           <ion-label>
-            <p class="make-field__label">Make</p>
+            <p class="make-field__label">{{ 'form.make' | t }}</p>
             @if (selectedMake()) {
-              <h2>{{ selectedMake() === 'Otra' ? 'Other…' : selectedMake() }}</h2>
+              <h2>{{ selectedMake() === 'Otra' ? ('form.other' | t) : selectedMake() }}</h2>
             } @else {
-              <h2 class="make-field__placeholder">Choose a make</h2>
+              <h2 class="make-field__placeholder">{{ 'form.chooseMake' | t }}</h2>
             }
           </ion-label>
           <ion-icon slot="end" name="chevron-expand-outline" class="make-field__chevron" aria-hidden="true"></ion-icon>
         </ion-item>
         @if (invalid('make')) {
-          <p class="error">Choose the make</p>
+          <p class="error">{{ 'form.makeError' | t }}</p>
         }
 
         @if (selectedMake() === 'Otra') {
           <div class="divider"></div>
           <ion-item lines="none" class="field">
             <ion-input
-              label="Which make?"
+              [label]="'form.whichMake' | t"
               labelPlacement="floating"
               formControlName="make"
             ></ion-input>
@@ -196,11 +196,11 @@
             (click)="openPicker('model')"
           >
             <ion-label>
-              <p class="make-field__label">Model</p>
+              <p class="make-field__label">{{ 'form.model' | t }}</p>
               @if (form.value.model) {
                 <h2>{{ form.value.model }}</h2>
               } @else {
-                <h2 class="make-field__placeholder">Choose a model</h2>
+                <h2 class="make-field__placeholder">{{ 'form.chooseModel' | t }}</h2>
               }
             </ion-label>
             <ion-icon slot="end" name="chevron-expand-outline" class="make-field__chevron" aria-hidden="true"></ion-icon>
@@ -208,15 +208,15 @@
         } @else {
           <ion-item lines="none" class="field">
             <ion-input
-              label="Model"
+              [label]="'form.model' | t"
               labelPlacement="floating"
               formControlName="model"
-              placeholder="Type it in"
+              [placeholder]="'form.typeIt' | t"
             ></ion-input>
           </ion-item>
         }
         @if (invalid('model')) {
-          <p class="error">Enter the model</p>
+          <p class="error">{{ 'form.modelError' | t }}</p>
         }
 
         <div class="divider"></div>
@@ -224,7 +224,7 @@
         <div class="row">
           <ion-item lines="none" class="field field--half">
             <ion-input
-              label="Year"
+              [label]="'form.year' | t"
               labelPlacement="floating"
               type="number"
               inputmode="numeric"
@@ -234,7 +234,7 @@
           <div class="row__sep"></div>
           <ion-item lines="none" class="field field--half">
             <ion-input
-              label="Plate"
+              [label]="'form.plate' | t"
               labelPlacement="floating"
               formControlName="plate"
               class="uppercase"
@@ -244,7 +244,7 @@
       </div>
 
       @if (generations().length) {
-        <h3 class="group">Generation</h3>
+        <h3 class="group">{{ 'form.generation' | t }}</h3>
         <div class="generations">
           @for (generation of generations(); track generation.value) {
             <button
@@ -255,7 +255,7 @@
             >
               <span class="generation__name">{{ generationLabel(generation.value) }}</span>
               <span class="generation__years">
-                {{ generation.from }} – {{ generation.to ?? 'now' }}
+                {{ generation.from }} – {{ generation.to ?? ('form.now' | t) }}
               </span>
             </button>
           }
@@ -263,7 +263,7 @@
       }
 
       @if (bodies().length) {
-        <h3 class="group">Body</h3>
+        <h3 class="group">{{ 'form.body' | t }}</h3>
         <div class="bodies">
           @for (body of bodies(); track body) {
             <button
@@ -273,13 +273,13 @@
               (click)="toggle('body', body)"
             >
               <app-body-icon [body]="body"></app-body-icon>
-              <span>{{ body }}</span>
+              <span>{{ i18n.tOr('body.' + body.toLowerCase(), body) }}</span>
             </button>
           }
         </div>
       }
 
-      <h3 class="group">Fuel</h3>
+      <h3 class="group">{{ 'form.fuel' | t }}</h3>
       <div class="fuels">
         @for (fuel of fuelOptions; track fuel.value) {
           <button
@@ -290,13 +290,13 @@
             (click)="form.patchValue({ fuel: fuel.value })"
           >
             <ion-icon [name]="fuel.icon" aria-hidden="true"></ion-icon>
-            <span>{{ fuel.label }}</span>
+            <span>{{ ('fuel.' + fuel.value) | t }}</span>
           </button>
         }
       </div>
 
       @if (transmissions().length) {
-        <h3 class="group">Gearbox</h3>
+        <h3 class="group">{{ 'form.gearbox' | t }}</h3>
         <div class="chips">
           @for (option of transmissions(); track option.value) {
             <button
@@ -312,7 +312,7 @@
       }
 
       @if (engines().length) {
-        <h3 class="group">Engine</h3>
+        <h3 class="group">{{ 'form.engine' | t }}</h3>
         <div class="chips">
           @for (engine of engines(); track engine) {
             <button
@@ -327,11 +327,11 @@
         </div>
       }
 
-      <h3 class="group">Mileage</h3>
+      <h3 class="group">{{ 'form.mileage' | t }}</h3>
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-input
-            label="Current mileage"
+            [label]="'form.currentMileage' | t"
             labelPlacement="floating"
             type="number"
             inputmode="numeric"
@@ -340,33 +340,33 @@
           <span slot="end" class="unit">km</span>
         </ion-item>
         @if (invalid('mileage')) {
-          <p class="error">Enter the mileage</p>
+          <p class="error">{{ 'form.mileageError' | t }}</p>
         }
 
         <div class="divider"></div>
 
         <ion-item lines="none" class="field">
           <ion-input
-            label="Kilometres per month"
+            [label]="'form.monthly' | t"
             labelPlacement="floating"
             type="number"
             inputmode="numeric"
             formControlName="monthlyMileage"
           ></ion-input>
-          <span slot="end" class="unit">km/month</span>
+          <span slot="end" class="unit">{{ 'form.perMonth' | t }}</span>
         </ion-item>
         <p class="hint">
           <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-          Used to estimate when each service falls due.
+          {{ 'form.monthlyHint' | t }}
         </p>
       </div>
 
-      <h3 class="group">Notes</h3>
+      <h3 class="group">{{ 'form.notes' | t }}</h3>
       <div class="card">
         <ion-item lines="none" class="field">
           <ion-textarea
             formControlName="notes"
-            placeholder="Anything you want to remember"
+            [placeholder]="'form.notesPlaceholder' | t"
             [autoGrow]="true"
             rows="3"
           ></ion-textarea>
@@ -383,7 +383,7 @@
           <ion-spinner name="crescent"></ion-spinner>
         } @else {
           <ion-icon slot="start" [name]="editingId() ? 'save-outline' : 'add-outline'"></ion-icon>
-          {{ editingId() ? 'Save changes' : 'Add to garage' }}
+          {{ (editingId() ? 'form.saveChanges' : 'form.addToGarage') | t }}
         }
       </ion-button>
     </div>
@@ -398,14 +398,14 @@
     <ng-template>
       <ion-header class="ion-no-border">
         <ion-toolbar>
-          <ion-title>{{ picker() === 'make' ? 'Make' : 'Model' }}</ion-title>
+          <ion-title>{{ (picker() === 'make' ? 'form.make' : 'form.model') | t }}</ion-title>
           <ion-buttons slot="end">
-            <ion-button (click)="closePicker()">Cancel</ion-button>
+            <ion-button (click)="closePicker()">{{ 'common.cancel' | t }}</ion-button>
           </ion-buttons>
         </ion-toolbar>
         <ion-toolbar>
           <ion-searchbar
-            placeholder="Search"
+            [placeholder]="'form.search' | t"
             [debounce]="0"
             (ionInput)="pickerQuery.set($any($event.detail.value) ?? '')"
           ></ion-searchbar>
@@ -427,7 +427,7 @@
             }
             <button type="button" class="make-tile" (click)="pickMake('Otra')">
               <span class="make-tile__other" aria-hidden="true">?</span>
-              <span>Other…</span>
+              <span>{{ 'form.other' | t }}</span>
             </button>
           </div>
         } @else {
@@ -447,7 +447,7 @@
               </button>
             }
             <button type="button" class="chip chip--large chip--ghost" (click)="pickModel(null)">
-              Other…
+              {{ 'form.other' | t }}
             </button>
           </div>
         }

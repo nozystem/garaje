@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -32,7 +31,10 @@ import {
 } from 'ionicons/icons';
 
 import { MaintenancePlan, PlanStatus } from '../../core/models/maintenance.model';
+import { LocalDatePipe, TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n } from '../../core/i18n/i18n.service';
 import { GarageStore } from '../../core/services/garage.store';
+import { CarIllustrationComponent } from '../../shared/car-illustration.component';
 import { PlanDraft, PlanFormComponent } from '../../shared/plan-form.component';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
 import {
@@ -43,13 +45,12 @@ import {
 
 type Tab = 'plans' | 'history';
 
-import { CarIllustrationComponent } from '../../shared/car-illustration.component';
 @Component({
   selector: 'app-vehicle-detail',
   templateUrl: './vehicle-detail.page.html',
   styleUrl: './vehicle-detail.page.scss',
   imports: [
-    CarIllustrationComponent, DatePipe, RouterLink,
+    CarIllustrationComponent, LocalDatePipe, RouterLink, TranslatePipe,
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonItem, IonLabel, IonList, IonModal, IonNote, IonSegment,
     IonSegmentButton, IonSpinner, IonTitle, IonToolbar,
@@ -63,6 +64,7 @@ export class VehicleDetailPage implements OnInit {
   private readonly alerts = inject(AlertController);
   private readonly toasts = inject(ToastController);
   readonly store = inject(GarageStore);
+  private readonly i18n = inject(I18n);
 
   readonly vehicleId = signal<string>('');
   readonly tab = signal<Tab>('plans');
@@ -123,21 +125,21 @@ export class VehicleDetailPage implements OnInit {
 
     const alert = await this.alerts.create({
       header: status.plan.title,
-      message: 'At what mileage was it done?',
+      message: this.i18n.t('detail.doneAt'),
       inputs: [
         {
           name: 'mileage',
           type: 'number',
           value: vehicle.mileage,
-          placeholder: 'Kilometres',
+          placeholder: this.i18n.t('detail.km'),
         },
-        { name: 'cost', type: 'number', placeholder: 'Cost (optional)' },
-        { name: 'workshop', type: 'text', placeholder: 'Workshop (optional)' },
+        { name: 'cost', type: 'number', placeholder: this.i18n.t('detail.cost') },
+        { name: 'workshop', type: 'text', placeholder: this.i18n.t('detail.workshop') },
       ],
       buttons: [
-        { text: 'Cancel', role: 'cancel' },
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
         {
-          text: 'Log it',
+          text: this.i18n.t('detail.logIt'),
           handler: (data) => {
             void this.registerCompletion(status, data);
           },
@@ -153,7 +155,7 @@ export class VehicleDetailPage implements OnInit {
   ): Promise<void> {
     const mileage = Number(data.mileage);
     if (!Number.isFinite(mileage) || mileage < 0) {
-      await this.toast('That mileage is not valid', 'danger');
+      await this.toast(this.i18n.t('detail.badMileage'), 'danger');
       return;
     }
 
@@ -168,7 +170,7 @@ export class VehicleDetailPage implements OnInit {
         cost: data.cost ? Number(data.cost) : undefined,
         workshop: data.workshop || undefined,
       });
-      await this.toast('Service logged', 'success');
+      await this.toast(this.i18n.t('detail.logged'), 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -189,10 +191,10 @@ export class VehicleDetailPage implements OnInit {
       const editing = this.editingPlan();
       if (editing) {
         await this.store.updatePlan(editing.id, draft);
-        await this.toast('Task updated', 'success');
+        await this.toast(this.i18n.t('detail.planUpdated'), 'success');
       } else {
         await this.store.addPlan(draft);
-        await this.toast('Task added', 'success');
+        await this.toast(this.i18n.t('detail.planAdded'), 'success');
       }
       this.closePlanForm();
     } catch (error) {
@@ -202,12 +204,12 @@ export class VehicleDetailPage implements OnInit {
 
   async confirmDeletePlan(status: PlanStatus): Promise<void> {
     const alert = await this.alerts.create({
-      header: 'Remove this task?',
-      message: `"${status.plan.title}" will stop reminding you. The history is kept.`,
+      header: this.i18n.t('detail.removePlanTitle'),
+      message: this.i18n.t('detail.removePlanText', { title: status.plan.title }),
       buttons: [
-        { text: 'Cancel', role: 'cancel' },
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
         {
-          text: 'Remove',
+          text: this.i18n.t('common.remove'),
           role: 'destructive',
           handler: () => {
             void this.removePlan(status.plan.id);
@@ -221,7 +223,7 @@ export class VehicleDetailPage implements OnInit {
   private async removePlan(id: string): Promise<void> {
     try {
       await this.store.removePlan(id);
-      await this.toast('Task removed', 'success');
+      await this.toast(this.i18n.t('detail.planRemoved'), 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -229,13 +231,12 @@ export class VehicleDetailPage implements OnInit {
 
   async confirmDelete(): Promise<void> {
     const alert = await this.alerts.create({
-      header: 'Delete this vehicle?',
-      message:
-        'Its history and scheduled tasks will go too. This cannot be undone.',
+      header: this.i18n.t('detail.deleteTitle'),
+      message: this.i18n.t('detail.deleteText'),
       buttons: [
-        { text: 'Cancel', role: 'cancel' },
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
         {
-          text: 'Delete',
+          text: this.i18n.t('common.delete'),
           role: 'destructive',
           handler: () => {
             void this.remove();
@@ -249,7 +250,7 @@ export class VehicleDetailPage implements OnInit {
   private async remove(): Promise<void> {
     try {
       await this.store.removeVehicle(this.vehicleId());
-      await this.toast('Vehicle deleted', 'success');
+      await this.toast(this.i18n.t('detail.deleted'), 'success');
       void this.router.navigate(['/garage']);
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
@@ -267,7 +268,7 @@ export class VehicleDetailPage implements OnInit {
   async deleteRecord(id: string): Promise<void> {
     try {
       await this.store.removeRecord(id);
-      await this.toast('Record deleted', 'success');
+      await this.toast(this.i18n.t('detail.recordDeleted'), 'success');
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }
@@ -275,7 +276,8 @@ export class VehicleDetailPage implements OnInit {
 
   private async toast(message: string, color: string): Promise<void> {
     const toast = await this.toasts.create({
-      message, color, duration: 2500, position: 'top',
+      // Los errores del servidor llegan en inglés; los ya traducidos no cambian.
+      message: this.i18n.serverMessage(message), color, duration: 2500, position: 'top',
     });
     await toast.present();
   }

@@ -27,7 +27,10 @@ import {
   MaintenancePlan,
 } from '../core/models/maintenance.model';
 import { Vehicle } from '../core/models/vehicle.model';
-import { CategoryIconPipe, CategoryLabelPipe } from './status.pipe';
+import { TranslatePipe } from '../core/i18n/i18n.pipes';
+import { TranslationKey } from '../core/i18n/en';
+import { I18n } from '../core/i18n/i18n.service';
+import { CategoryIconPipe, CategoryLabelPipe, KmPipe } from './status.pipe';
 
 export type PlanDraft = Omit<MaintenancePlan, 'id' | 'createdAt'>;
 
@@ -39,11 +42,12 @@ export type PlanDraft = Omit<MaintenancePlan, 'id' | 'createdAt'>;
     ReactiveFormsModule,
     IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInput,
     IonItem, IonSelect, IonSelectOption, IonTitle, IonToolbar,
-    CategoryIconPipe, CategoryLabelPipe,
+    CategoryIconPipe, CategoryLabelPipe, KmPipe, TranslatePipe,
   ],
 })
 export class PlanFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly i18n = inject(I18n);
 
   readonly vehicle = input.required<Vehicle>();
   readonly editing = input<MaintenancePlan | null>(null);
@@ -92,9 +96,10 @@ export class PlanFormComponent implements OnInit {
   }
 
   applyPreset(preset: (typeof MAINTENANCE_PRESETS)[number]): void {
-    this.usedPreset.set(preset.title);
+    this.usedPreset.set(preset.id);
     this.form.patchValue({
-      title: preset.title,
+      // Se guarda en el idioma de ese momento: es un texto del usuario.
+      title: this.i18n.t(`preset.${preset.id}` as TranslationKey),
       category: preset.category,
       intervalKm: preset.intervalKm ?? null,
       intervalMonths: preset.intervalMonths ?? null,

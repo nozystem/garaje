@@ -1,11 +1,11 @@
 <ion-header [translucent]="true" class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button text="Back" defaultHref="/garage"></ion-back-button>
+      <ion-back-button [text]="'common.back' | t" defaultHref="/garage"></ion-back-button>
     </ion-buttons>
     <ion-title>{{ vehicle()?.nickname }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button [routerLink]="['/vehicle', vehicleId(), 'edit']" aria-label="Edit">
+      <ion-button [routerLink]="['/vehicle', vehicleId(), 'edit']" [attr.aria-label]="'common.edit' | t">
         <ion-icon slot="icon-only" name="create-outline"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -28,7 +28,7 @@
           @if (store.illustrating().has(v.id)) {
             <div class="hero__art hero__art--loading">
               <ion-spinner name="crescent"></ion-spinner>
-              <span>Painting your car…</span>
+              <span>{{ 'detail.painting' | t }}</span>
             </div>
           } @else if (v.illustration) {
             <app-car-illustration
@@ -49,7 +49,7 @@
         @if (!v.photo && !store.illustrating().has(v.id)) {
           <button type="button" class="hero__illustrate" (click)="illustrate(v.id, !!v.illustration)">
             <ion-icon name="sparkles-outline" aria-hidden="true"></ion-icon>
-            {{ v.illustration ? 'New illustration' : 'Create illustration' }}
+            {{ (v.illustration ? 'detail.newIllustration' : 'detail.createIllustration') | t }}
           </button>
         }
         @if (v.plate) {
@@ -62,30 +62,30 @@
       <div class="stat">
         <ion-icon name="speedometer-outline" aria-hidden="true"></ion-icon>
         <span class="stat__value">{{ v.mileage | km }}</span>
-        <span class="stat__label">Mileage</span>
+        <span class="stat__label">{{ 'detail.mileage' | t }}</span>
       </div>
       <div class="stat" [class.stat--alert]="overdue() > 0">
         <ion-icon
           [name]="overdue() ? 'alert-circle-outline' : 'checkmark-circle-outline'"
           aria-hidden="true"
         ></ion-icon>
-        <span class="stat__value">{{ overdue() || 'Up to date' }}</span>
-        <span class="stat__label">{{ overdue() ? 'Overdue' : 'Status' }}</span>
+        <span class="stat__value">{{ overdue() || ('status.ok' | t) }}</span>
+        <span class="stat__label">{{ (overdue() ? 'detail.overdue' : 'detail.status') | t }}</span>
       </div>
       <div class="stat">
         <ion-icon name="cash-outline" aria-hidden="true"></ion-icon>
         <span class="stat__value">{{ totalSpent() ? (totalSpent() + ' €') : '—' }}</span>
-        <span class="stat__label">Spent</span>
+        <span class="stat__label">{{ 'detail.spent' | t }}</span>
       </div>
     </div>
 
     <div class="body">
       <ion-segment [value]="tab()" (ionChange)="tab.set($any($event.detail.value))">
         <ion-segment-button value="plans">
-          <ion-label>Maintenance</ion-label>
+          <ion-label>{{ 'detail.maintenance' | t }}</ion-label>
         </ion-segment-button>
         <ion-segment-button value="history">
-          <ion-label>History</ion-label>
+          <ion-label>{{ 'detail.history' | t }}</ion-label>
         </ion-segment-button>
       </ion-segment>
 
@@ -105,14 +105,14 @@
         } @else {
           <div class="empty">
             <ion-icon name="construct-outline"></ion-icon>
-            <h2>No maintenance set up yet</h2>
-            <p>Add the tasks you want to track: oil, brakes, inspection…</p>
+            <h2>{{ 'detail.noPlans' | t }}</h2>
+            <p>{{ 'detail.noPlansText' | t }}</p>
           </div>
         }
 
         <ion-button expand="block" fill="outline" class="add" (click)="openPlanForm()">
           <ion-icon slot="start" name="add-outline"></ion-icon>
-          Add maintenance
+          {{ 'detail.addPlan' | t }}
         </ion-button>
       } @else {
         @if (records().length) {
@@ -128,7 +128,7 @@
                 <ion-label>
                   <h3>{{ record.title }}</h3>
                   <p class="record__meta">
-                    {{ record.date | date: 'd MMM yyyy' }} ·
+                    {{ record.date | ldate: 'd MMM yyyy' }} ·
                     {{ record.mileage | km }}
                     @if (record.workshop) { · {{ record.workshop }} }
                   </p>
@@ -142,7 +142,7 @@
                     size="small"
                     color="medium"
                     (click)="deleteRecord(record.id)"
-                    [attr.aria-label]="'Delete ' + record.title"
+                    [attr.aria-label]="'detail.deleteRecord' | t: { title: record.title }"
                   >
                     <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
                   </ion-button>
@@ -153,14 +153,14 @@
         } @else {
           <div class="empty">
             <ion-icon name="time-outline"></ion-icon>
-            <h2>No history yet</h2>
-            <p>Once you log a service it will show up here.</p>
+            <h2>{{ 'detail.noHistory' | t }}</h2>
+            <p>{{ 'detail.noHistoryText' | t }}</p>
           </div>
         }
       }
 
       @if (v.notes) {
-        <h3 class="group">Notes</h3>
+        <h3 class="group">{{ 'detail.notes' | t }}</h3>
         <div class="notes">{{ v.notes }}</div>
       }
 
@@ -172,7 +172,7 @@
         (click)="confirmDelete()"
       >
         <ion-icon slot="start" name="trash-outline"></ion-icon>
-        Delete vehicle
+        {{ 'detail.deleteVehicle' | t }}
       </ion-button>
     </div>
     <ion-modal

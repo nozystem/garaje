@@ -10,6 +10,8 @@ import {
   IonIcon,
   IonItem,
   IonLabel,
+  IonSegment,
+  IonSegmentButton,
   IonTitle,
   IonToolbar,
   ToastController,
@@ -23,6 +25,8 @@ import {
   trashOutline,
 } from 'ionicons/icons';
 
+import { TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n, LANGUAGES } from '../../core/i18n/i18n.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GarageStore } from '../../core/services/garage.store';
 
@@ -32,7 +36,7 @@ import { GarageStore } from '../../core/services/garage.store';
   styleUrl: './settings.page.scss',
   imports: [
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
-    IonItem, IonLabel, IonTitle, IonToolbar,
+    IonItem, IonLabel, IonSegment, IonSegmentButton, IonTitle, IonToolbar, TranslatePipe,
   ],
 })
 export class SettingsPage {
@@ -41,6 +45,8 @@ export class SettingsPage {
   private readonly router = inject(Router);
   readonly auth = inject(AuthService);
   readonly store = inject(GarageStore);
+  readonly i18n = inject(I18n);
+  readonly languages = LANGUAGES;
 
   readonly counts = computed(() => ({
     vehicles: this.store.vehicles().length,
@@ -87,14 +93,12 @@ export class SettingsPage {
 
   async confirmDeleteAccount(): Promise<void> {
     const alert = await this.alerts.create({
-      header: 'Delete your account?',
-      message:
-        'Your vehicles, their history and scheduled tasks will be deleted. ' +
-        'This cannot be undone.',
+      header: this.i18n.t('settings.deleteTitle'),
+      message: this.i18n.t('settings.deleteText'),
       buttons: [
-        { text: 'Cancel', role: 'cancel' },
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
         {
-          text: 'Delete account',
+          text: this.i18n.t('settings.deleteConfirm'),
           role: 'destructive',
           handler: () => {
             void this.deleteAccount();
@@ -112,7 +116,7 @@ export class SettingsPage {
       void this.router.navigate(['/sign-in']);
     } catch (error) {
       const toast = await this.toasts.create({
-        message: AuthService.message(error),
+        message: this.i18n.serverMessage(AuthService.message(error)),
         color: 'danger',
         duration: 3000,
         position: 'top',

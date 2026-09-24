@@ -18,6 +18,8 @@ import {
   personOutline,
 } from 'ionicons/icons';
 
+import { TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n } from '../../core/i18n/i18n.service';
 import { AuthService } from '../../core/services/auth.service';
 
 type Mode = 'login' | 'register';
@@ -28,7 +30,7 @@ type Mode = 'login' | 'register';
   styleUrl: './auth.page.scss',
   imports: [
     ReactiveFormsModule,
-    IonButton, IonContent, IonIcon, IonInput, IonItem, IonSpinner,
+    IonButton, IonContent, IonIcon, IonInput, IonItem, IonSpinner, TranslatePipe,
   ],
 })
 export class AuthPage {
@@ -36,6 +38,7 @@ export class AuthPage {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastController);
+  private readonly i18n = inject(I18n);
 
   readonly mode = signal<Mode>('login');
   readonly busy = signal(false);
@@ -91,7 +94,7 @@ export class AuthPage {
       void this.router.navigate(['/garage']);
     } catch (error) {
       const toast = await this.toasts.create({
-        message: AuthService.message(error),
+        message: this.i18n.serverMessage(AuthService.message(error)),
         color: 'danger',
         duration: 3000,
         position: 'top',

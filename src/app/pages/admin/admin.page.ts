@@ -1,4 +1,4 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import {
@@ -15,6 +15,9 @@ import {
 import { addIcons } from 'ionicons';
 import { refreshOutline } from 'ionicons/icons';
 import { firstValueFrom } from 'rxjs';
+
+import { LocalDatePipe, TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n } from '../../core/i18n/i18n.service';
 
 /** Espejo de AdminStats en server/lib/store.ts. */
 interface UsageWindow {
@@ -57,13 +60,14 @@ type Window = 'today' | 'week' | 'month' | 'total';
   templateUrl: './admin.page.html',
   styleUrl: './admin.page.scss',
   imports: [
-    DatePipe, DecimalPipe,
+    DecimalPipe, LocalDatePipe, TranslatePipe,
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonSpinner, IonTitle, IonToolbar,
   ],
 })
 export class AdminPage implements OnInit {
   private readonly http = inject(HttpClient);
+  readonly i18n = inject(I18n);
 
   readonly stats = signal<AdminStats | null>(null);
   readonly loading = signal(false);

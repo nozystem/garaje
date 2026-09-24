@@ -40,6 +40,8 @@ import {
   waterOutline,
 } from 'ionicons/icons';
 
+import { TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n } from '../../core/i18n/i18n.service';
 import { GarageStore } from '../../core/services/garage.store';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
 import { VehicleCardComponent } from '../../shared/vehicle-card.component';
@@ -67,11 +69,13 @@ import { VehicleCardComponent } from '../../shared/vehicle-card.component';
     RouterLink,
     PlanStatusCardComponent,
     VehicleCardComponent,
+    TranslatePipe,
   ],
 })
 export class GaragePage implements OnInit {
   private readonly router = inject(Router);
   readonly store = inject(GarageStore);
+  readonly i18n = inject(I18n);
 
   readonly hasVehicles = computed(() => this.store.vehicles().length > 0);
 

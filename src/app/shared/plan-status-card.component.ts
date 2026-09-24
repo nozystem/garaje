@@ -1,5 +1,4 @@
-import { DatePipe } from '@angular/common';
-import { Component, input, output } from '@angular/core';
+import { Component, inject, input, output } from '@angular/core';
 import {
   IonBadge,
   IonButton,
@@ -13,6 +12,8 @@ import {
   IonProgressBar,
 } from '@ionic/angular';
 
+import { LocalDatePipe, TranslatePipe } from '../core/i18n/i18n.pipes';
+import { I18n } from '../core/i18n/i18n.service';
 import { PlanStatus } from '../core/models/maintenance.model';
 import {
   CategoryIconPipe,
@@ -27,7 +28,8 @@ import {
   templateUrl: './plan-status-card.component.html',
   styleUrl: './plan-status-card.component.scss',
   imports: [
-    DatePipe,
+    LocalDatePipe,
+    TranslatePipe,
     IonBadge,
     IonButton,
     IonIcon,
@@ -46,6 +48,8 @@ import {
   ],
 })
 export class PlanStatusCardComponent {
+  private readonly i18n = inject(I18n);
+
   readonly status = input.required<PlanStatus>();
   readonly showVehicle = input(false);
   readonly vehicleName = input<string>('');
@@ -61,30 +65,31 @@ export class PlanStatusCardComponent {
 
   get remainingText(): string {
     const s = this.status();
+    const t = this.i18n.t.bind(this.i18n);
 
     if (s.limitingFactor === 'km' && s.kmRemaining !== undefined) {
       return s.kmRemaining < 0
-        ? `${this.formatKm(-s.kmRemaining)} over`
-        : `${this.formatKm(s.kmRemaining)} left`;
+        ? t('plan.kmOver', { km: this.formatKm(-s.kmRemaining) })
+        : t('plan.kmLeft', { km: this.formatKm(s.kmRemaining) });
     }
 
     if (s.limitingFactor === 'time' && s.daysRemaining !== undefined) {
       return s.daysRemaining < 0
-        ? `Overdue by ${this.formatDays(-s.daysRemaining)}`
-        : `${this.formatDays(s.daysRemaining)} left`;
+        ? t('plan.overdueBy', { time: this.formatDays(-s.daysRemaining) })
+        : t('plan.timeLeft', { time: this.formatDays(s.daysRemaining) });
     }
 
-    return 'No due date';
+    return t('plan.noDue');
   }
 
   private formatKm(km: number): string {
-    return new Intl.NumberFormat('en-GB').format(Math.round(km)) + ' km';
+    return new Intl.NumberFormat(this.i18n.locale()).format(Math.round(km)) + ' km';
   }
 
   private formatDays(days: number): string {
     const d = Math.round(days);
-    if (d < 31) return `${d} day${d === 1 ? '' : 's'}`;
+    if (d < 31) return this.i18n.t(d === 1 ? 'unit.day' : 'unit.days', { n: d });
     const months = Math.round(d / 30.44);
-    return `${months} month${months === 1 ? '' : 's'}`;
+    return this.i18n.t(months === 1 ? 'unit.month' : 'unit.months', { n: months });
   }
 }

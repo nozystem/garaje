@@ -1167,7 +1167,7 @@ async function handleRecords(res, method, userId, id, body) {
     const parsed = validateRecord(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const vehicle = await findById("vehicles", userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ["El veh\xEDculo no existe"]);
+    if (!vehicle) return badRequest(res, ["The vehicle does not exist"]);
     const record = {
       ...parsed.value,
       id: newId(),
@@ -1209,7 +1209,7 @@ async function handlePlans(res, method, userId, id, body) {
     const parsed = validatePlan(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const vehicle = await findById("vehicles", userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ["El veh\xEDculo no existe"]);
+    if (!vehicle) return badRequest(res, ["The vehicle does not exist"]);
     const plan = {
       ...parsed.value,
       id: newId(),

@@ -2,8 +2,9 @@ import { MaintenanceCategory } from '../models/maintenance.model';
 import { FuelType, VehicleType } from '../models/vehicle.model';
 
 export interface MaintenancePreset {
+  /** Su nombre se traduce con la clave `preset.<id>`. */
+  id: string;
   category: MaintenanceCategory;
-  title: string;
   intervalKm?: number;
   intervalMonths?: number;
   types?: VehicleType[];
@@ -13,68 +14,68 @@ export interface MaintenancePreset {
 export const MAINTENANCE_PRESETS: MaintenancePreset[] = [
   {
     category: 'oil',
-    title: 'Oil and filter change',
+    id: 'oil',
     intervalKm: 15000,
     intervalMonths: 12,
     fuels: ['gasoline', 'diesel', 'hybrid'],
   },
   {
     category: 'filters',
-    title: 'Air filter',
+    id: 'airFilter',
     intervalKm: 30000,
     intervalMonths: 24,
     fuels: ['gasoline', 'diesel', 'hybrid'],
   },
   {
     category: 'filters',
-    title: 'Cabin filter',
+    id: 'cabinFilter',
     intervalKm: 20000,
     intervalMonths: 12,
   },
   {
     category: 'brakes',
-    title: 'Brake inspection',
+    id: 'brakeInspection',
     intervalKm: 20000,
     intervalMonths: 12,
   },
   {
     category: 'brakes',
-    title: 'Brake fluid',
+    id: 'brakeFluid',
     intervalMonths: 24,
   },
   {
     category: 'tires',
-    title: 'Tyre rotation',
+    id: 'tyreRotation',
     intervalKm: 10000,
     types: ['car', 'van'],
   },
   {
     category: 'battery',
-    title: 'Battery check',
+    id: 'batteryCheck',
     intervalMonths: 12,
   },
   {
     category: 'coolant',
-    title: 'Coolant',
+    id: 'coolant',
     intervalKm: 60000,
     intervalMonths: 48,
     fuels: ['gasoline', 'diesel', 'hybrid'],
   },
   {
     category: 'timing-belt',
-    title: 'Timing belt',
+    id: 'timingBelt',
     intervalKm: 120000,
     intervalMonths: 84,
     fuels: ['gasoline', 'diesel'],
   },
   {
     category: 'inspection',
-    title: 'Roadworthiness test',
+    id: 'inspection',
     intervalMonths: 12,
   },
   {
     category: 'insurance',
-    title: 'Insurance renewal',
+    id: 'insurance',
     intervalMonths: 12,
   },
 ];
@@ -89,19 +90,6 @@ export function presetsFor(
       (!preset.fuels || preset.fuels.includes(fuel))
   );
 }
-
-export const CATEGORY_LABELS: Record<MaintenanceCategory, string> = {
-  oil: 'Oil',
-  filters: 'Filters',
-  brakes: 'Brakes',
-  tires: 'Tyres',
-  battery: 'Battery',
-  coolant: 'Coolant',
-  'timing-belt': 'Timing belt',
-  inspection: 'Roadworthiness test',
-  insurance: 'Insurance',
-  other: 'Other',
-};
 
 export const CATEGORY_ICONS: Record<MaintenanceCategory, string> = {
   oil: 'water-outline',

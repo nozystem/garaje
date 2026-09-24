@@ -1,11 +1,11 @@
 <ion-header class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-button (click)="dismissed.emit()">Cancel</ion-button>
+      <ion-button (click)="dismissed.emit()">{{ 'common.cancel' | t }}</ion-button>
     </ion-buttons>
-    <ion-title>{{ editing() ? 'Edit task' : 'New task' }}</ion-title>
+    <ion-title>{{ (editing() ? 'plan.editTitle' : 'plan.newTitle') | t }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button strong="true" (click)="onSubmit()">Save</ion-button>
+      <ion-button strong="true" (click)="onSubmit()">{{ 'common.save' | t }}</ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -14,65 +14,65 @@
   <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
 
     @if (!editing()) {
-      <h3 class="group">Common for {{ vehicle().nickname }}</h3>
+      <h3 class="group">{{ 'plan.commonFor' | t: { name: vehicle().nickname } }}</h3>
       <div class="presets">
-        @for (preset of presets; track preset.title) {
+        @for (preset of presets; track preset.id) {
           <button
             type="button"
             class="preset"
-            [class.preset--active]="usedPreset() === preset.title"
+            [class.preset--active]="usedPreset() === preset.id"
             (click)="applyPreset(preset)"
           >
             <ion-icon [name]="preset.category | categoryIcon" aria-hidden="true"></ion-icon>
-            <span class="preset__title">{{ preset.title }}</span>
+            <span class="preset__title">{{ ('preset.' + preset.id) | t }}</span>
             <span class="preset__interval">
-              @if (preset.intervalKm) { {{ preset.intervalKm / 1000 }}.000 km }
+              @if (preset.intervalKm) { {{ preset.intervalKm | km }} }
               @if (preset.intervalKm && preset.intervalMonths) { · }
-              @if (preset.intervalMonths) { {{ preset.intervalMonths }} meses }
+              @if (preset.intervalMonths) { {{ 'unit.months' | t: { n: preset.intervalMonths } }} }
             </span>
           </button>
         }
       </div>
     }
 
-    <h3 class="group">Details</h3>
+    <h3 class="group">{{ 'plan.details' | t }}</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="Task name"
+          [label]="'plan.name' | t"
           labelPlacement="floating"
           formControlName="title"
-          placeholder="Oil change"
+          [placeholder]="'plan.namePlaceholder' | t"
         ></ion-input>
       </ion-item>
       @if (invalid('title')) {
-        <p class="error">Give the task a name</p>
+        <p class="error">{{ 'plan.nameError' | t }}</p>
       }
 
       <div class="divider"></div>
 
       <ion-item lines="none" class="field">
         <ion-select
-          label="Category"
+          [label]="'plan.category' | t"
           labelPlacement="floating"
           formControlName="category"
-          [interfaceOptions]="{ header: 'Category' }"
+          [interfaceOptions]="{ header: 'plan.category' | t }"
         >
           @for (category of categories; track category) {
             <ion-select-option [value]="category">
               {{ category | categoryLabel }}
             </ion-select-option>
           }
-          <ion-select-option value="other">Other</ion-select-option>
+          <ion-select-option value="other">{{ 'category.other' | t }}</ion-select-option>
         </ion-select>
       </ion-item>
     </div>
 
-    <h3 class="group">How often?</h3>
+    <h3 class="group">{{ 'plan.howOften' | t }}</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="Every X kilometres"
+          [label]="'plan.everyKm' | t"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
@@ -86,31 +86,31 @@
 
       <ion-item lines="none" class="field">
         <ion-input
-          label="Every X months"
+          [label]="'plan.everyMonths' | t"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
           formControlName="intervalMonths"
           placeholder="12"
         ></ion-input>
-        <span slot="end" class="unit">monthes</span>
+        <span slot="end" class="unit">{{ 'unit.monthsShort' | t }}</span>
       </ion-item>
 
       @if (missingInterval && submitted()) {
-        <p class="error">Set at least one of the two intervals</p>
+        <p class="error">{{ 'plan.intervalError' | t }}</p>
       } @else {
         <p class="hint">
           <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-          With both set, whichever comes first wins.
+          {{ 'plan.intervalHint' | t }}
         </p>
       }
     </div>
 
-    <h3 class="group">Last time it was done</h3>
+    <h3 class="group">{{ 'plan.lastTime' | t }}</h3>
     <div class="card">
       <ion-item lines="none" class="field">
         <ion-input
-          label="At what mileage"
+          [label]="'plan.atMileage' | t"
           labelPlacement="floating"
           type="number"
           inputmode="numeric"
@@ -124,7 +124,7 @@
 
       <ion-item lines="none" class="field">
         <ion-input
-          label="On what date"
+          [label]="'plan.onDate' | t"
           labelPlacement="floating"
           type="date"
           formControlName="lastServiceDate"
@@ -133,7 +133,7 @@
 
       <p class="hint">
         <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
-        Leave blank to start counting from today.
+        {{ 'plan.lastHint' | t }}
       </p>
     </div>
 

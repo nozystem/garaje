@@ -58,6 +58,8 @@ import {
 } from '../../core/services/catalog.service';
 import { PhotoService } from '../../core/services/photo.service';
 import { GarageStore } from '../../core/services/garage.store';
+import { TranslatePipe } from '../../core/i18n/i18n.pipes';
+import { I18n } from '../../core/i18n/i18n.service';
 import { BodyIconComponent } from '../../shared/body-icon.component';
 import {
   CarIllustrationComponent,
@@ -85,14 +87,6 @@ function normalize(text: string): string {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
 
-const TRANSMISSION_LABELS: Record<string, string> = {
-  manual: 'Manual',
-  automatic: 'Automatic',
-  automated_manual: 'Automated manual',
-  dual_clutch: 'Dual clutch',
-  cvt: 'CVT',
-};
-
 /** Motores que se muestran como máximo, de los más comunes a los menos. */
 const MAX_ENGINES = 18;
 
@@ -115,11 +109,12 @@ function values(list: FacetValue[] | undefined): string[] {
   return (list ?? []).map((v) => v.value);
 }
 
-const FUEL_OPTIONS: { value: FuelType; label: string; icon: string }[] = [
-  { value: 'gasoline', label: 'Petrol', icon: 'water-outline' },
-  { value: 'diesel', label: 'Diesel', icon: 'flash-outline' },
-  { value: 'hybrid', label: 'Hybrid', icon: 'leaf-outline' },
-  { value: 'electric', label: 'Electric', icon: 'battery-charging-outline' },
+// El nombre de cada uno se traduce con la clave `fuel.<value>`.
+const FUEL_OPTIONS: { value: FuelType; icon: string }[] = [
+  { value: 'gasoline', icon: 'water-outline' },
+  { value: 'diesel', icon: 'flash-outline' },
+  { value: 'hybrid', icon: 'leaf-outline' },
+  { value: 'electric', icon: 'battery-charging-outline' },
 ];
 
 type FormValue = ReturnType<VehicleFormPage['form']['getRawValue']>;
@@ -133,7 +128,7 @@ type FormValue = ReturnType<VehicleFormPage['form']['getRawValue']>;
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonInput, IonItem, IonLabel, IonModal, IonSearchbar,
     IonSpinner, IonTextarea, IonTitle, IonToolbar,
-    BodyIconComponent, CarIllustrationComponent, MakeLogoComponent,
+    BodyIconComponent, CarIllustrationComponent, MakeLogoComponent, TranslatePipe,
   ],
 })
 export class VehicleFormPage implements OnInit {
@@ -141,6 +136,7 @@ export class VehicleFormPage implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(ToastController);
+  readonly i18n = inject(I18n);
   readonly store = inject(GarageStore);
   readonly catalog = inject(CatalogService);
   private readonly photos = inject(PhotoService);
@@ -307,7 +303,8 @@ export class VehicleFormPage implements OnInit {
   readonly transmissions = computed(() =>
     values(this.specFacets().transmission).map((value) => ({
       value,
-      label: TRANSMISSION_LABELS[value] ?? label(value),
+      // Los valores raros de la API que no están traducidos se muestran legibles.
+      label: this.i18n.tOr(`gear.${value}`, label(value)),
     }))
   );
 
@@ -516,7 +513,7 @@ export class VehicleFormPage implements OnInit {
 
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      await this.toast('Check the highlighted fields', 'warning');
+      await this.toast(this.i18n.t('form.checkFields'), 'warning');
       return;
     }
 
@@ -527,11 +524,11 @@ export class VehicleFormPage implements OnInit {
       const id = this.editingId();
       if (id) {
         await this.store.updateVehicle(id, value);
-        await this.toast('Vehicle updated', 'success');
+        await this.toast(this.i18n.t('form.updated'), 'success');
         void this.router.navigate(['/vehicle', id]);
       } else {
         const created = await this.store.addVehicle(value);
-        await this.toast('Vehicle added', 'success');
+        await this.toast(this.i18n.t('form.added'), 'success');
         void this.router.navigate(['/vehicle', created.id]);
       }
     } catch (error) {
@@ -542,7 +539,13 @@ export class VehicleFormPage implements OnInit {
   }
 
   private async toast(message: string, color: string): Promise<void> {
-    const toast = await this.toasts.create({ message, color, duration: 2500, position: 'top' });
+    const toast = await this.toasts.create({
+      // Los errores del servidor llegan en inglés; los ya traducidos no cambian.
+      message: this.i18n.serverMessage(message),
+      color,
+      duration: 2500,
+      position: 'top',
+    });
     await toast.present();
   }
 }

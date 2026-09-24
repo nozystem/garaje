@@ -25,17 +25,17 @@
         {{ vehicle().make }} {{ vehicle().model }} · {{ vehicle().year }}
       </p>
       <ion-note class="vehicle__km">
-        {{ vehicle().mileage | km }} · {{ fuelLabel }}
+        {{ vehicle().mileage | km }} · {{ ('fuel.' + vehicle().fuel) | t }}
       </ion-note>
     </div>
 
     <div class="vehicle__status">
       @if (overdue > 0) {
-        <ion-badge color="danger">{{ overdue }} vencido{{ overdue === 1 ? '' : 's' }}</ion-badge>
+        <ion-badge color="danger">{{ (overdue === 1 ? 'card.overdueOne' : 'card.overdueMany') | t: { n: overdue } }}</ion-badge>
       } @else if (dueSoon > 0) {
-        <ion-badge color="warning">{{ dueSoon }} pendiente{{ dueSoon === 1 ? '' : 's' }}</ion-badge>
+        <ion-badge color="warning">{{ (dueSoon === 1 ? 'card.dueOne' : 'card.dueMany') | t: { n: dueSoon } }}</ion-badge>
       } @else {
-        <ion-badge color="success">Up to date</ion-badge>
+        <ion-badge color="success">{{ 'status.ok' | t }}</ion-badge>
       }
       <ion-icon name="chevron-forward-outline" class="vehicle__chevron" aria-hidden="true"></ion-icon>
     </div>

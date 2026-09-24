@@ -1,12 +1,17 @@
-import { Pipe, PipeTransform } from '@angular/core';
+import { Pipe, PipeTransform, inject } from '@angular/core';
 
-import { CATEGORY_ICONS, CATEGORY_LABELS } from '../core/data/maintenance-presets';
+import { CATEGORY_ICONS } from '../core/data/maintenance-presets';
+import { I18n } from '../core/i18n/i18n.service';
 import { DueStatus, MaintenanceCategory } from '../core/models/maintenance.model';
 
-@Pipe({ name: 'categoryLabel' })
+// Los pipes con texto son impuros para seguir al idioma elegido.
+
+@Pipe({ name: 'categoryLabel', pure: false })
 export class CategoryLabelPipe implements PipeTransform {
+  private readonly i18n = inject(I18n);
+
   transform(category: MaintenanceCategory): string {
-    return CATEGORY_LABELS[category] ?? category;
+    return this.i18n.t(`category.${category}`);
   }
 }
 
@@ -29,22 +34,21 @@ export class StatusColorPipe implements PipeTransform {
   }
 }
 
-@Pipe({ name: 'statusLabel' })
+@Pipe({ name: 'statusLabel', pure: false })
 export class StatusLabelPipe implements PipeTransform {
+  private readonly i18n = inject(I18n);
+
   transform(status: DueStatus): string {
-    switch (status) {
-      case 'overdue': return 'Overdue';
-      case 'due-soon': return 'Due now';
-      case 'upcoming': return 'Coming up';
-      default: return 'Up to date';
-    }
+    return this.i18n.t(`status.${status}`);
   }
 }
 
-@Pipe({ name: 'km' })
+@Pipe({ name: 'km', pure: false })
 export class KmPipe implements PipeTransform {
+  private readonly i18n = inject(I18n);
+
   transform(value: number | undefined): string {
     if (value === undefined) return '—';
-    return new Intl.NumberFormat('en-GB').format(Math.round(value)) + ' km';
+    return new Intl.NumberFormat(this.i18n.locale()).format(Math.round(value)) + ' km';
   }
 }
