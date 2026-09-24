@@ -25,6 +25,7 @@ import {
 } from './car-facets.ts';
 import {
   COST_PER_IMAGE_USD,
+  ILLUSTRATION_VERSION,
   generateIllustration,
   illustrationKey,
   isConfigured as isIllustrationConfigured,
@@ -114,6 +115,23 @@ export async function handleRequest(
   if (!userId) {
     unauthorized(res);
     return;
+  }
+
+  // Ilustración ya guardada de un coche igual, para enseñarla en el formulario
+  // antes de crear el vehículo. Solo lee la caché: nunca genera ni gasta.
+  if (path === '/api/illustrations') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    const q = url.searchParams;
+    const image = await findIllustration(
+      illustrationKey({
+        make: q.get('make') ?? '',
+        model: q.get('model') ?? '',
+        year: Number(q.get('year')) || 0,
+        generation: q.get('generation') ?? undefined,
+        body: q.get('body') ?? undefined,
+      })
+    );
+    return sendIllustration(res, { illustration: image ?? undefined }, 'private, max-age=3600');
   }
 
   if (path === '/api/admin/stats') {
@@ -291,6 +309,7 @@ async function handleVehicles(
       ...existing,
       illustration,
       illustrationAt: new Date().toISOString(),
+      illustrationVersion: ILLUSTRATION_VERSION,
     };
     await upsert('vehicles', userId, id, updated);
     json(res, 200, forClient(updated));
@@ -313,18 +332,19 @@ async function handleVehicles(
       parsed.value.year !== existing.year ||
       parsed.value.type !== existing.type;
 
-    // La ilustración muestra carrocería y color: si cambian, deja de valer.
+    // La ilustración muestra el coche y su carrocería; el color no, porque la
+    // app la recolorea al mostrarla.
     const looksChanged =
       identityChanged ||
       parsed.value.generation !== existing.generation ||
-      parsed.value.body !== existing.body ||
-      parsed.value.color !== existing.color;
+      parsed.value.body !== existing.body;
 
     const updated: StoredVehicle = {
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? undefined : existing.illustration,
       illustrationAt: looksChanged ? undefined : existing.illustrationAt,
+      illustrationVersion: looksChanged ? undefined : existing.illustrationVersion,
       mileageUpdatedAt:
         parsed.value.mileage !== existing.mileage
           ? new Date().toISOString()
@@ -468,13 +488,20 @@ function forClient(vehicle: StoredVehicle): StoredVehicle {
   };
 }
 
-function sendIllustration(res: ServerResponse, vehicle: StoredVehicle): void {
+/**
+ * Por defecto la URL lleva versión y cambia con cada ilustración nueva, así
+ * que puede cachearse para siempre.
+ */
+function sendIllustration(
+  res: ServerResponse,
+  vehicle: Pick<StoredVehicle, 'illustration'>,
+  cacheControl = 'private, max-age=31536000, immutable'
+): void {
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(vehicle.illustration ?? '');
   if (!match) return notFound(res);
 
   res.statusCode = 200;
   res.setHeader('Content-Type', match[1]);
-  // La URL cambia con cada ilustración nueva, así que puede cachearse siempre.
-  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.setHeader('Cache-Control', cacheControl);
   res.end(Buffer.from(match[2], 'base64'));
 }

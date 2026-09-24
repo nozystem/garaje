@@ -43,12 +43,13 @@ import {
 
 type Tab = 'plans' | 'history';
 
+import { CarIllustrationComponent } from '../../shared/car-illustration.component';
 @Component({
   selector: 'app-vehicle-detail',
   templateUrl: './vehicle-detail.page.html',
   styleUrl: './vehicle-detail.page.scss',
   imports: [
-    DatePipe, RouterLink,
+    CarIllustrationComponent, DatePipe, RouterLink,
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonItem, IonLabel, IonList, IonModal, IonNote, IonSegment,
     IonSegmentButton, IonSpinner, IonTitle, IonToolbar,

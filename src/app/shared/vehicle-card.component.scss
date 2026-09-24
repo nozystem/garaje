@@ -48,8 +48,9 @@
   background: #fff;
 }
 
-.vehicle__icon--art img {
-  object-fit: contain;
+.vehicle__icon--art app-car-illustration {
+  width: 100%;
+  height: 100%;
 }
 
 .vehicle__info {

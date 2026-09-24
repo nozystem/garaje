@@ -46,7 +46,7 @@ import {
   waterOutline,
 } from 'ionicons/icons';
 
-import { FuelType, VehicleType } from '../../core/models/vehicle.model';
+import { FuelType, Vehicle, VehicleType } from '../../core/models/vehicle.model';
 import {
   CatalogMake,
   CatalogService,
@@ -59,12 +59,26 @@ import {
 import { PhotoService } from '../../core/services/photo.service';
 import { GarageStore } from '../../core/services/garage.store';
 import { BodyIconComponent } from '../../shared/body-icon.component';
+import {
+  CarIllustrationComponent,
+  PAINTABLE_ILLUSTRATION_VERSION,
+} from '../../shared/car-illustration.component';
 import { MakeLogoComponent } from '../../shared/make-logo.component';
 
+// Las ilustraciones se pintan en el navegador, así que cualquier color vale:
+// estos son atajos, y hay un selector libre para el resto.
 const COLORS = [
   '#e74c3c', '#4d9de0', '#2ec27e', '#f5a623',
   '#9b59b6', '#16a085', '#5d6d7e', '#e67e22',
+  '#f4f4f4', '#b9bdc3', '#1f2023',
 ];
+
+/** Para poner la marca de elegido en oscuro sobre los colores claros. */
+function isLight(hex: string): boolean {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const luminance = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return luminance > 170;
+}
 
 /** Para buscar sin distinguir mayúsculas ni tildes: "citro" encuentra Citroën. */
 function normalize(text: string): string {
@@ -119,7 +133,7 @@ type FormValue = ReturnType<VehicleFormPage['form']['getRawValue']>;
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonInput, IonItem, IonLabel, IonModal, IonSearchbar,
     IonSpinner, IonTextarea, IonTitle, IonToolbar,
-    BodyIconComponent, MakeLogoComponent,
+    BodyIconComponent, CarIllustrationComponent, MakeLogoComponent,
   ],
 })
 export class VehicleFormPage implements OnInit {
@@ -138,6 +152,10 @@ export class VehicleFormPage implements OnInit {
 
   private readonly photoInput = viewChild<ElementRef<HTMLInputElement>>('photoInput');
   readonly editingId = signal<string | null>(null);
+  private readonly editing = signal<Vehicle | null>(null);
+  /** Ilustración que no existe en la caché, para no insistir en mostrarla. */
+  readonly missingIllustration = signal<string | null>(null);
+  readonly isLight = isLight;
   readonly submitted = signal(false);
 
   readonly selectedMake = signal<string>('');
@@ -228,6 +246,36 @@ export class VehicleFormPage implements OnInit {
 
   readonly generationLabel = generationLabel;
 
+  readonly customColor = computed(() => !COLORS.includes(this.value().color));
+
+  /**
+   * Ilustración para la vista previa, que se pinta en directo con el color
+   * elegido. Al editar es la del propio coche mientras no cambie lo que se
+   * ve en ella; si no, la de un coche igual ya guardada en el servidor, que
+   * solo se consulta y nunca se genera desde aquí.
+   */
+  readonly previewIllustration = computed(() => {
+    const v = this.value();
+    if (v.photo || !v.make || !v.model || this.customModel()) return null;
+
+    const saved = this.editing();
+    const unchanged =
+      saved?.illustration &&
+      (saved.illustrationVersion ?? 0) >= PAINTABLE_ILLUSTRATION_VERSION &&
+      saved.make === v.make &&
+      saved.model === v.model &&
+      (saved.generation ?? '') === v.generation &&
+      (saved.body ?? '') === v.body &&
+      (v.generation || saved.year === Number(v.year));
+    if (unchanged) return saved.illustration!;
+
+    const params = new URLSearchParams({ make: v.make, model: v.model, year: String(v.year) });
+    if (v.generation) params.set('generation', v.generation);
+    if (v.body) params.set('body', v.body);
+    const url = `/api/illustrations?${params}`;
+    return this.missingIllustration() === url ? null : url;
+  });
+
   /** Modelos de API Ninjas, por popularidad; si no responde, los del catálogo. */
   readonly models = computed(() => {
     const remote = values(this.modelFacets().model);
@@ -280,6 +328,7 @@ export class VehicleFormPage implements OnInit {
     }
 
     this.editingId.set(id);
+    this.editing.set(vehicle);
     this.selectedMake.set(vehicle.make);
     this.form.patchValue({
       nickname: vehicle.nickname,

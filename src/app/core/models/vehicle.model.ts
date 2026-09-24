@@ -21,6 +21,8 @@ export interface Vehicle {
   color?: string;
   photo?: string;
   illustration?: string;
+  /** 2 = dibujada en verde de base para recolorearla; antes, ya pintada. */
+  illustrationVersion?: number;
   notes?: string;
   createdAt: string;
 }

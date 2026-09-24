@@ -11,11 +11,12 @@ import { PlanStatus } from '../core/models/maintenance.model';
 import { Vehicle } from '../core/models/vehicle.model';
 import { KmPipe } from './status.pipe';
 
+import { CarIllustrationComponent } from './car-illustration.component';
 @Component({
   selector: 'app-vehicle-card',
   templateUrl: './vehicle-card.component.html',
   styleUrl: './vehicle-card.component.scss',
-  imports: [IonBadge, IonCard, IonCardContent, IonIcon, IonNote, KmPipe],
+  imports: [CarIllustrationComponent, IonBadge, IonCard, IonCardContent, IonIcon, IonNote, KmPipe],
 })
 export class VehicleCardComponent {
   readonly vehicle = input.required<Vehicle>();

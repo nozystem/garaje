@@ -8,8 +8,12 @@
     <div class="vehicle__icon" [class.vehicle__icon--art]="!vehicle().photo && vehicle().illustration">
       @if (vehicle().photo) {
         <img [src]="vehicle().photo" alt="" />
-      } @else if (vehicle().illustration) {
-        <img [src]="vehicle().illustration" alt="" />
+      } @else if (vehicle().illustration; as illustration) {
+        <app-car-illustration
+          [src]="illustration"
+          [color]="vehicle().color"
+          [version]="vehicle().illustrationVersion"
+        ></app-car-illustration>
       } @else {
         <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
       }

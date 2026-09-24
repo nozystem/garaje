@@ -7,6 +7,7 @@ import {
   PlanStatus,
 } from '../models/maintenance.model';
 import { Vehicle, VehicleDraft } from '../models/vehicle.model';
+import { PAINTABLE_ILLUSTRATION_VERSION } from '../../shared/car-illustration.component';
 import { ApiService } from './api.service';
 import { byUrgency, evaluatePlan } from './maintenance-calculator';
 
@@ -131,7 +132,10 @@ export class GarageStore {
   }
 
   private illustrateIfMissing(vehicle: Vehicle): void {
-    if (vehicle.photo || vehicle.illustration) return;
+    // Las ilustraciones de antes de la versión 2 venían ya pintadas y no se
+    // pueden recolorear: se sustituyen, una vez, por una en verde de base.
+    const current = (vehicle.illustrationVersion ?? 0) >= PAINTABLE_ILLUSTRATION_VERSION;
+    if (vehicle.photo || (vehicle.illustration && current)) return;
     // Sin IA configurada o con un fallo puntual el coche sigue con la imagen
     // de catálogo; desde el detalle se puede volver a intentar.
     this.illustrate(vehicle.id).catch(() => undefined);

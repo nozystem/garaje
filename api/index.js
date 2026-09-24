@@ -597,27 +597,19 @@ async function carFacets(query, track) {
 var MODEL = "gemini-3.1-flash-lite-image";
 var REQUEST_TIMEOUT_MS2 = 9e4;
 var COST_PER_IMAGE_USD = 0.0336;
-var COLOR_NAMES = {
-  "#e74c3c": "bright red",
-  "#4d9de0": "sky blue",
-  "#2ec27e": "emerald green",
-  "#f5a623": "amber yellow",
-  "#9b59b6": "purple",
-  "#16a085": "teal",
-  "#5d6d7e": "slate grey",
-  "#e67e22": "orange"
-};
+var ILLUSTRATION_VERSION = 2;
+var BASE_PAINT = "pure saturated bright green (#00C853)";
 var ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
 function plain2(text) {
   return (text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
 function illustrationKey(q) {
   return [
+    `v${ILLUSTRATION_VERSION}`,
     plain2(q.make),
     plain2(q.model),
     plain2(q.generation) || String(q.year),
-    plain2(q.body) || "car",
-    plain2(q.color) || "silver"
+    plain2(q.body) || "car"
   ].join("|");
 }
 function isConfigured2() {
@@ -633,14 +625,15 @@ function generationText(generation) {
   return `, ${ordinal} generation (Mk${n})${match[2] ? " facelift" : ""}`;
 }
 function promptFor(q) {
-  const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? "silver";
   const body = q.body?.toLowerCase() ?? "car";
   return [
     `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)},`,
-    `${body}, painted ${color}. Accurate shape and details for that exact model and generation.`,
+    `${body}, painted in a ${BASE_PAINT}, the whole body in exactly that one flat green.`,
+    "Accurate shape and details for that exact model and generation.",
     "Pure 90-degree side profile, the whole car visible, front of the car pointing left.",
-    "Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows.",
-    "Plain white background, thin soft shadow under the wheels.",
+    "Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows,",
+    "red tail lights, clear headlights.",
+    "Plain white background, neutral grey soft shadow under the wheels.",
     "No text, no logos, no watermark."
   ].join(" ");
 }
@@ -980,6 +973,20 @@ async function handleRequest(req, res) {
     unauthorized(res);
     return;
   }
+  if (path === "/api/illustrations") {
+    if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+    const q = url.searchParams;
+    const image = await findIllustration(
+      illustrationKey({
+        make: q.get("make") ?? "",
+        model: q.get("model") ?? "",
+        year: Number(q.get("year")) || 0,
+        generation: q.get("generation") ?? void 0,
+        body: q.get("body") ?? void 0
+      })
+    );
+    return sendIllustration(res, { illustration: image ?? void 0 }, "private, max-age=3600");
+  }
   if (path === "/api/admin/stats") {
     if (method !== "GET") return methodNotAllowed(res, ["GET"]);
     const user = await findUserById(userId);
@@ -1113,7 +1120,8 @@ async function handleVehicles(res, method, userId, id, action, body) {
     const updated = {
       ...existing,
       illustration,
-      illustrationAt: (/* @__PURE__ */ new Date()).toISOString()
+      illustrationAt: (/* @__PURE__ */ new Date()).toISOString(),
+      illustrationVersion: ILLUSTRATION_VERSION
     };
     await upsert("vehicles", userId, id, updated);
     json(res, 200, forClient(updated));
@@ -1128,12 +1136,13 @@ async function handleVehicles(res, method, userId, id, action, body) {
     const parsed = validateVehicle(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const identityChanged = parsed.value.make !== existing.make || parsed.value.model !== existing.model || parsed.value.year !== existing.year || parsed.value.type !== existing.type;
-    const looksChanged = identityChanged || parsed.value.generation !== existing.generation || parsed.value.body !== existing.body || parsed.value.color !== existing.color;
+    const looksChanged = identityChanged || parsed.value.generation !== existing.generation || parsed.value.body !== existing.body;
     const updated = {
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? void 0 : existing.illustration,
       illustrationAt: looksChanged ? void 0 : existing.illustrationAt,
+      illustrationVersion: looksChanged ? void 0 : existing.illustrationVersion,
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
     await upsert("vehicles", userId, id, updated);
@@ -1231,12 +1240,12 @@ function forClient(vehicle) {
     illustration: `/api/vehicles/${vehicle.id}/illustration?v=${version}`
   };
 }
-function sendIllustration(res, vehicle) {
+function sendIllustration(res, vehicle, cacheControl = "private, max-age=31536000, immutable") {
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(vehicle.illustration ?? "");
   if (!match) return notFound(res);
   res.statusCode = 200;
   res.setHeader("Content-Type", match[1]);
-  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.setHeader("Cache-Control", cacheControl);
   res.end(Buffer.from(match[2], "base64"));
 }
 

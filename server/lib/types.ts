@@ -35,6 +35,8 @@ export interface StoredVehicle {
   photo?: string;
   illustration?: string;
   illustrationAt?: string;
+  /** Ver ILLUSTRATION_VERSION en car-illustration.ts. */
+  illustrationVersion?: number;
   notes?: string;
   createdAt: string;
 }

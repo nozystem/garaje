@@ -70,6 +70,30 @@
   object-fit: cover;
 }
 
+/* Ilustración del coche, en grande y con el color elegido. */
+.preview__art {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 16 / 9;
+  margin-bottom: 12px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
+.preview__art app-car-illustration {
+  width: 100%;
+  height: 100%;
+}
+
+.preview__art .preview__add--art {
+  right: 8px;
+  bottom: 8px;
+  border: none;
+  cursor: pointer;
+}
+
 /* Pastilla de cámara en la esquina, sobre la foto o el icono. */
 .preview__add,
 .preview__edit {
@@ -496,6 +520,29 @@
   font-size: 20px;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Marca de elegido en oscuro sobre blanco y plata. */
+.colors__dot--light {
+  color: #12121a;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.colors__dot--custom {
+  position: relative;
+  overflow: hidden;
+  background: var(
+    --custom,
+    conic-gradient(#e74c3c, #f5a623, #2ec27e, #4d9de0, #9b59b6, #e74c3c)
+  );
+  cursor: pointer;
+}
+
+.colors__dot--custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .colors__dot--active {

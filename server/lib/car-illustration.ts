@@ -11,7 +11,6 @@ export interface IllustrationQuery {
   year: number;
   generation?: string;
   body?: string;
-  color?: string;
 }
 
 /** La mitad de precio que gemini-3.1-flash-image y acierta igual el modelo. */
@@ -21,18 +20,19 @@ const REQUEST_TIMEOUT_MS = 90_000;
 /** Precio oficial de una imagen 1K de ese modelo, para el panel de admin. */
 export const COST_PER_IMAGE_USD = 0.0336;
 
-/** Los colores del formulario, con un nombre que el modelo entienda. */
-const COLOR_NAMES: Record<string, string> = {
-  '#e74c3c': 'bright red',
-  '#4d9de0': 'sky blue',
-  '#2ec27e': 'emerald green',
-  '#f5a623': 'amber yellow',
-  '#9b59b6': 'purple',
-  '#16a085': 'teal',
-  '#5d6d7e': 'slate grey',
-  '#e67e22': 'orange',
-};
+/**
+ * Versión del formato de las ilustraciones. Desde la 2 se dibujan siempre en
+ * BASE_PAINT y la app las recolorea con el color de cada coche; las de antes
+ * venían ya pintadas y hay que regenerarlas.
+ */
+export const ILLUSTRATION_VERSION = 2;
 
+/**
+ * Verde intenso como pintura de base: ninguna otra pieza de un coche es
+ * verde (los pilotos son rojos o ámbar, los cristales grises), así que al
+ * recolorear solo cambia la carrocería.
+ */
+const BASE_PAINT = 'pure saturated bright green (#00C853)';
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth'];
 
 /** Minúsculas, sin tildes ni espacios sobrantes: "León" y "leon " son lo mismo. */
@@ -42,15 +42,16 @@ function plain(text: string | undefined): string {
 
 /**
  * Identifica lo que se ve en la ilustración, para reutilizarla entre coches
- * iguales. Con generación el año sobra: dentro de ella el coche no cambia.
+ * iguales. El color no cuenta, porque lo pone la app al mostrarla. Con
+ * generación el año sobra: dentro de ella el coche no cambia.
  */
 export function illustrationKey(q: IllustrationQuery): string {
   return [
+    `v${ILLUSTRATION_VERSION}`,
     plain(q.make),
     plain(q.model),
     plain(q.generation) || String(q.year),
     plain(q.body) || 'car',
-    plain(q.color) || 'silver',
   ].join('|');
 }
 
@@ -76,15 +77,16 @@ function generationText(generation: string | undefined): string {
 }
 
 function promptFor(q: IllustrationQuery): string {
-  const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? 'silver';
   const body = q.body?.toLowerCase() ?? 'car';
 
   return [
     `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)},`,
-    `${body}, painted ${color}. Accurate shape and details for that exact model and generation.`,
+    `${body}, painted in a ${BASE_PAINT}, the whole body in exactly that one flat green.`,
+    'Accurate shape and details for that exact model and generation.',
     'Pure 90-degree side profile, the whole car visible, front of the car pointing left.',
-    'Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows.',
-    'Plain white background, thin soft shadow under the wheels.',
+    'Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows,',
+    'red tail lights, clear headlights.',
+    'Plain white background, neutral grey soft shadow under the wheels.',
     'No text, no logos, no watermark.',
   ].join(' ');
 }

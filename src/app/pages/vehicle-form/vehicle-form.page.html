@@ -13,32 +13,48 @@
     <div class="preview" [style.--accent]="form.value.color">
       <div class="preview__glow"></div>
 
-      <button
-        type="button"
-        class="preview__badge"
-        [class.preview__badge--photo]="form.value.photo"
-        (click)="pickPhoto()"
-        [attr.aria-label]="form.value.photo ? 'Change the photo' : 'Add a photo'"
-      >
-        @if (form.value.photo) {
-          <img [src]="form.value.photo" alt="" />
-          <span class="preview__edit">
+      @if (previewIllustration(); as illustration) {
+        <!-- El coche con el color elegido: cambia en directo al tocar otro color. -->
+        <div class="preview__art">
+          <app-car-illustration
+            [src]="illustration"
+            [color]="form.value.color"
+            [version]="2"
+            [alt]="form.value.make + ' ' + form.value.model"
+            (missing)="missingIllustration.set($event)"
+          ></app-car-illustration>
+          <button type="button" class="preview__add preview__add--art" (click)="pickPhoto()" aria-label="Add a photo">
             <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
-          </span>
-        } @else if (processingPhoto()) {
-          <ion-spinner name="crescent"></ion-spinner>
-        } @else if (selectedMakeSlug(); as slug) {
-          <app-make-logo class="preview__logo" [slug]="slug" [name]="selectedMake()"></app-make-logo>
-          <span class="preview__add">
-            <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
-          </span>
-        } @else {
-          <ion-icon name="car-sport-outline" aria-hidden="true"></ion-icon>
-          <span class="preview__add">
-            <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
-          </span>
-        }
-      </button>
+          </button>
+        </div>
+      } @else {
+        <button
+          type="button"
+          class="preview__badge"
+          [class.preview__badge--photo]="form.value.photo"
+          (click)="pickPhoto()"
+          [attr.aria-label]="form.value.photo ? 'Change the photo' : 'Add a photo'"
+        >
+          @if (form.value.photo) {
+            <img [src]="form.value.photo" alt="" />
+            <span class="preview__edit">
+              <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+            </span>
+          } @else if (processingPhoto()) {
+            <ion-spinner name="crescent"></ion-spinner>
+          } @else if (selectedMakeSlug(); as slug) {
+            <app-make-logo class="preview__logo" [slug]="slug" [name]="selectedMake()"></app-make-logo>
+            <span class="preview__add">
+              <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+            </span>
+          } @else {
+            <ion-icon name="car-sport-outline" aria-hidden="true"></ion-icon>
+            <span class="preview__add">
+              <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+            </span>
+          }
+        </button>
+      }
 
       @if (form.value.photo) {
         <button type="button" class="preview__remove" (click)="removePhoto()">
@@ -315,6 +331,7 @@
             type="button"
             class="colors__dot"
             [class.colors__dot--active]="form.value.color === color"
+            [class.colors__dot--light]="isLight(color)"
             [style.background]="color"
             (click)="form.patchValue({ color })"
             [attr.aria-label]="'Color ' + color"
@@ -324,6 +341,24 @@
             }
           </button>
         }
+        <!-- Cualquier otro color: la ilustración se pinta en el navegador. -->
+        <label
+          class="colors__dot colors__dot--custom"
+          [class.colors__dot--active]="customColor()"
+          [style.--custom]="customColor() ? form.value.color : null"
+          aria-label="Other colour"
+        >
+          <input
+            type="color"
+            [value]="form.value.color"
+            (input)="form.patchValue({ color: $any($event.target).value })"
+          />
+          @if (customColor()) {
+            <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
+          } @else {
+            <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+          }
+        </label>
       </div>
 
       <h3 class="group">Notes</h3>
