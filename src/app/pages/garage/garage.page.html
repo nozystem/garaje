@@ -2,9 +2,16 @@
   <ion-toolbar>
     <ion-title>{{ 'garage.title' | t }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button routerLink="/settings" [attr.aria-label]="'common.settings' | t">
-        <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
-      </ion-button>
+      @if (selecting()) {
+        <ion-button (click)="stopSelecting()">{{ 'common.cancel' | t }}</ion-button>
+      } @else {
+        @if (hasVehicles()) {
+          <ion-button (click)="selecting.set(true)">{{ 'garage.select' | t }}</ion-button>
+        }
+        <ion-button routerLink="/settings" [attr.aria-label]="'common.settings' | t">
+          <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
+        </ion-button>
+      }
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -87,6 +94,8 @@
             <app-vehicle-card
               [vehicle]="vehicle"
               [plans]="store.plansFor(vehicle.id)"
+              [selectable]="selecting()"
+              [selected]="selected().has(vehicle.id)"
               (open)="openVehicle($event)"
             ></app-vehicle-card>
           }
@@ -98,7 +107,23 @@
   <div class="bottom-space"></div>
 </ion-content>
 
-@if (hasVehicles()) {
+@if (selecting()) {
+  <!-- Barra de acciones de la selección múltiple. -->
+  <ion-footer class="selection">
+    <ion-toolbar>
+      <ion-buttons slot="start">
+        <ion-button (click)="selectAll()">{{ 'garage.selectAll' | t }}</ion-button>
+      </ion-buttons>
+      <ion-title size="small">{{ 'garage.selectedCount' | t: { n: selected().size } }}</ion-title>
+      <ion-buttons slot="end">
+        <ion-button color="danger" strong="true" [disabled]="!selected().size || deleting()" (click)="confirmDelete()">
+          <ion-icon slot="start" name="trash-outline"></ion-icon>
+          {{ 'common.delete' | t }}
+        </ion-button>
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-footer>
+} @else if (hasVehicles()) {
   <ion-fab slot="fixed" vertical="bottom" horizontal="end">
     <ion-fab-button routerLink="/vehicle/new" [attr.aria-label]="'garage.addVehicle' | t">
       <ion-icon name="add-outline"></ion-icon>

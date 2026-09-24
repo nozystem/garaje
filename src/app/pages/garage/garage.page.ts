@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import {
   IonButton,
@@ -8,6 +8,7 @@ import {
   IonContent,
   IonFab,
   IonFabButton,
+  IonFooter,
   IonHeader,
   IonIcon,
   IonList,
@@ -16,6 +17,8 @@ import {
   IonSpinner,
   IonTitle,
   IonToolbar,
+  AlertController,
+  ToastController,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
@@ -34,6 +37,7 @@ import {
   ellipseOutline,
   funnelOutline,
   settingsOutline,
+  trashOutline,
   shieldCheckmarkOutline,
   syncOutline,
   thermometerOutline,
@@ -58,6 +62,7 @@ import { VehicleCardComponent } from '../../shared/vehicle-card.component';
     IonContent,
     IonFab,
     IonFabButton,
+    IonFooter,
     IonHeader,
     IonIcon,
     IonList,
@@ -74,16 +79,23 @@ import { VehicleCardComponent } from '../../shared/vehicle-card.component';
 })
 export class GaragePage implements OnInit {
   private readonly router = inject(Router);
+  private readonly alerts = inject(AlertController);
+  private readonly toasts = inject(ToastController);
   readonly store = inject(GarageStore);
   readonly i18n = inject(I18n);
 
   readonly hasVehicles = computed(() => this.store.vehicles().length > 0);
 
+  /** Selección múltiple para borrar varios coches a la vez. */
+  readonly selecting = signal(false);
+  readonly selected = signal<ReadonlySet<string>>(new Set());
+  readonly deleting = signal(false);
+
   constructor() {
     addIcons({
       addOutline, alertCircleOutline, bicycleOutline, buildOutline,
       busOutline, carOutline,
-      checkmarkCircleOutline, chevronForwardOutline, settingsOutline,
+      checkmarkCircleOutline, chevronForwardOutline, settingsOutline, trashOutline,
       waterOutline, funnelOutline, discOutline, ellipseOutline,
       batteryHalfOutline, thermometerOutline, syncOutline,
       shieldCheckmarkOutline, documentTextOutline, constructOutline,
@@ -104,7 +116,65 @@ export class GaragePage implements OnInit {
   }
 
   openVehicle(id: string): void {
+    if (this.selecting()) {
+      this.selected.update((ids) => {
+        const next = new Set(ids);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      });
+      return;
+    }
     void this.router.navigate(['/vehicle', id]);
+  }
+
+  selectAll(): void {
+    this.selected.set(new Set(this.store.vehicles().map((v) => v.id)));
+  }
+
+  stopSelecting(): void {
+    this.selecting.set(false);
+    this.selected.set(new Set());
+  }
+
+  async confirmDelete(): Promise<void> {
+    const n = this.selected().size;
+    const alert = await this.alerts.create({
+      header: this.i18n.t(n === 1 ? 'garage.deleteTitleOne' : 'garage.deleteTitleMany', { n }),
+      message: this.i18n.t('garage.deleteText'),
+      buttons: [
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
+        { text: this.i18n.t('common.delete'), role: 'destructive', handler: () => void this.deleteSelected() },
+      ],
+    });
+    await alert.present();
+  }
+
+  private async deleteSelected(): Promise<void> {
+    this.deleting.set(true);
+    const ids = [...this.selected()];
+    let deleted = 0;
+    try {
+      for (const id of ids) {
+        await this.store.removeVehicle(id);
+        deleted++;
+      }
+      this.stopSelecting();
+      await this.toast(
+        this.i18n.t(deleted === 1 ? 'garage.deletedOne' : 'garage.deletedMany', { n: deleted }),
+        'success'
+      );
+    } catch (error) {
+      // Los ya borrados salen de la selección; el resto sigue marcado.
+      this.selected.set(new Set(ids.slice(deleted)));
+      await this.toast(this.i18n.serverMessage((error as Error).message), 'danger');
+    } finally {
+      this.deleting.set(false);
+    }
+  }
+
+  private async toast(message: string, color: string): Promise<void> {
+    const toast = await this.toasts.create({ message, color, duration: 2500, position: 'top' });
+    await toast.present();
   }
 
   completePlan(vehicleId: string, planId: string): void {

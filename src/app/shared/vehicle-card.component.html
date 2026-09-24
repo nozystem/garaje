@@ -1,6 +1,8 @@
 <button
   type="button"
   class="vehicle"
+  [class.vehicle--selected]="selectable() && selected()"
+  [attr.aria-pressed]="selectable() ? selected() : null"
   [style.--accent]="vehicle().color || 'var(--ion-color-primary)'"
   (click)="open.emit(vehicle().id)"
 >
@@ -15,6 +17,14 @@
       ></app-car-illustration>
     } @else {
       <ion-icon name="car-sport-outline" aria-hidden="true"></ion-icon>
+    }
+
+    @if (selectable()) {
+      <ion-icon
+        class="vehicle__check"
+        [name]="selected() ? 'checkmark-circle' : 'ellipse-outline'"
+        aria-hidden="true"
+      ></ion-icon>
     }
 
     <span class="vehicle__badge">

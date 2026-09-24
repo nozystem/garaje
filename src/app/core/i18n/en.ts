@@ -33,6 +33,14 @@ export const en = {
   'garage.allGood': 'All up to date',
   'garage.allGoodText': 'Nothing is due right now.',
   'garage.vehicles': 'Vehicles',
+  'garage.select': 'Select',
+  'garage.selectedCount': '{n} selected',
+  'garage.selectAll': 'Select all',
+  'garage.deleteTitleOne': 'Delete this vehicle?',
+  'garage.deleteTitleMany': 'Delete {n} vehicles?',
+  'garage.deleteText': 'Their history and scheduled tasks will go too. This cannot be undone.',
+  'garage.deletedOne': 'Vehicle deleted',
+  'garage.deletedMany': '{n} vehicles deleted',
 
   // common
   'common.settings': 'Settings',

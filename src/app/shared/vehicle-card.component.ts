@@ -1,7 +1,13 @@
 import { Component, computed, inject, input, output } from '@angular/core';
 import { IonBadge, IonIcon } from '@ionic/angular';
 import { addIcons } from 'ionicons';
-import { calendarOutline, constructOutline, speedometerOutline } from 'ionicons/icons';
+import {
+  calendarOutline,
+  checkmarkCircle,
+  constructOutline,
+  ellipseOutline,
+  speedometerOutline,
+} from 'ionicons/icons';
 
 import { LocalDatePipe, TranslatePipe } from '../core/i18n/i18n.pipes';
 import { I18n } from '../core/i18n/i18n.service';
@@ -30,6 +36,9 @@ export class VehicleCardComponent {
   readonly vehicle = input.required<Vehicle>();
   /** Tareas del coche, de la más urgente a la menos. */
   readonly plans = input<PlanStatus[]>([]);
+  /** En modo selección, tocar la tarjeta la marca en vez de abrir el coche. */
+  readonly selectable = input(false);
+  readonly selected = input(false);
 
   readonly open = output<string>();
 
@@ -45,6 +54,6 @@ export class VehicleCardComponent {
   });
 
   constructor() {
-    addIcons({ calendarOutline, constructOutline, speedometerOutline });
+    addIcons({ calendarOutline, checkmarkCircle, constructOutline, ellipseOutline, speedometerOutline });
   }
 }

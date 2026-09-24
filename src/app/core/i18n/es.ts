@@ -32,6 +32,14 @@ export const es: Record<TranslationKey, string> = {
   'garage.allGood': 'Todo al día',
   'garage.allGoodText': 'No hay nada pendiente ahora mismo.',
   'garage.vehicles': 'Vehículos',
+  'garage.select': 'Seleccionar',
+  'garage.selectedCount': '{n} seleccionados',
+  'garage.selectAll': 'Seleccionar todo',
+  'garage.deleteTitleOne': '¿Eliminar este vehículo?',
+  'garage.deleteTitleMany': '¿Eliminar {n} vehículos?',
+  'garage.deleteText': 'También se borrarán su historial y sus tareas. No se puede deshacer.',
+  'garage.deletedOne': 'Vehículo eliminado',
+  'garage.deletedMany': '{n} vehículos eliminados',
 
   // common
   'common.settings': 'Ajustes',

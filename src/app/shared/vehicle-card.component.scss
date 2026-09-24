@@ -27,6 +27,22 @@
   transform: scale(0.98);
 }
 
+/* Marcada para borrar: borde del color principal alrededor de toda la tarjeta. */
+.vehicle--selected {
+  box-shadow: 0 0 0 2px var(--ion-color-primary);
+}
+
+.vehicle__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  font-size: 26px;
+  color: var(--ion-color-primary);
+  background: var(--ion-card-background);
+  border-radius: 50%;
+}
+
 .vehicle:focus-visible {
   outline: 2px solid var(--ion-color-primary);
   outline-offset: 2px;
