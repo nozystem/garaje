@@ -188,6 +188,8 @@ export const en = {
   'detail.recordDeleted': 'Record deleted',
   'detail.generatePlan': 'Generate plan with AI',
   'detail.plansAdded': '{n} tasks added',
+  'detail.label': 'Download the service label (PDF)',
+  'detail.labelFailed': 'The label could not be created',
 
   // body
   'body.sedan': 'Sedan',
@@ -344,6 +346,17 @@ export const en = {
   'theme.system': 'System',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
+
+  // label
+  'label.title': 'SERVICE CARRIED OUT',
+  'label.date': 'Date',
+  'label.mileage': 'Mileage',
+  'label.work': 'Work done',
+  'label.workshop': 'Workshop',
+  'label.cost': 'Cost',
+  'label.next': 'Next service',
+  'label.nextUnknown': 'See the maintenance plan in the app',
+  'label.file': 'service',
 } as const;
 
 export type TranslationKey = keyof typeof en;

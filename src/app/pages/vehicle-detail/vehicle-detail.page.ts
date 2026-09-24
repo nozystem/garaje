@@ -30,7 +30,7 @@ import {
   trashOutline, waterOutline,
 } from 'ionicons/icons';
 
-import { MaintenancePlan, PlanStatus } from '../../core/models/maintenance.model';
+import { MaintenancePlan, MaintenanceRecord, PlanStatus } from '../../core/models/maintenance.model';
 import { LocalDatePipe, TranslatePipe } from '../../core/i18n/i18n.pipes';
 import { I18n } from '../../core/i18n/i18n.service';
 import { GarageStore } from '../../core/services/garage.store';
@@ -38,6 +38,7 @@ import { CarIllustrationComponent } from '../../shared/car-illustration.componen
 import { PlanDraft, PlanFormComponent } from '../../shared/plan-form.component';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
 import { PlanSuggestionsComponent } from '../../shared/plan-suggestions.component';
+import { downloadServiceLabel } from '../../shared/service-label';
 import {
   CategoryIconPipe,
   CategoryLabelPipe,
@@ -279,6 +280,41 @@ export class VehicleDetailPage implements OnInit {
       await this.store.illustrate(id);
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
+    }
+  }
+
+  /**
+   * Etiqueta en PDF de la visita a la que pertenece el registro: todo lo
+   * hecho ese día, con el próximo mantenimiento de esas tareas.
+   */
+  async downloadLabel(record: MaintenanceRecord): Promise<void> {
+    const vehicle = this.vehicle();
+    if (!vehicle) return;
+
+    const day = record.date.slice(0, 10);
+    const records = this.records().filter((r) => r.date.slice(0, 10) === day);
+    const plans = new Set(records.map((r) => r.planId).filter(Boolean));
+    const statuses = this.plans().filter((s) => plans.has(s.plan.id));
+
+    const kms = statuses
+      .filter((s) => s.kmRemaining !== undefined)
+      .map((s) => vehicle.mileage + s.kmRemaining!);
+    const dates = statuses
+      .filter((s) => s.daysRemaining !== undefined)
+      .map((s) => Date.now() + s.daysRemaining! * 86_400_000);
+
+    try {
+      await downloadServiceLabel(
+        {
+          vehicle,
+          records,
+          nextKm: kms.length ? Math.min(...kms) : undefined,
+          nextDate: dates.length ? new Date(Math.min(...dates)).toISOString() : undefined,
+        },
+        this.i18n
+      );
+    } catch {
+      await this.toast(this.i18n.t('detail.labelFailed'), 'danger');
     }
   }
 

@@ -147,6 +147,16 @@
                   <ion-button
                     fill="clear"
                     size="small"
+                    color="primary"
+                    (click)="downloadLabel(record)"
+                    [attr.aria-label]="'detail.label' | t"
+                    [title]="'detail.label' | t"
+                  >
+                    <ion-icon slot="icon-only" name="document-text-outline"></ion-icon>
+                  </ion-button>
+                  <ion-button
+                    fill="clear"
+                    size="small"
                     color="medium"
                     (click)="deleteRecord(record.id)"
                     [attr.aria-label]="'detail.deleteRecord' | t: { title: record.title }"

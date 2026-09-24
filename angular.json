@@ -38,7 +38,10 @@
               "src/global.scss",
               "src/theme/variables.scss"
             ],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "html2canvas"
+            ]
           },
           "configurations": {
             "production": {

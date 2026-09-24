@@ -1,4 +1,4 @@
-import { TranslationKey } from './en';
+import type { TranslationKey } from './en';
 
 /** Textos en español. */
 export const es: Record<TranslationKey, string> = {
@@ -187,6 +187,8 @@ export const es: Record<TranslationKey, string> = {
   'detail.recordDeleted': 'Registro borrado',
   'detail.generatePlan': 'Generar plan con IA',
   'detail.plansAdded': '{n} tareas añadidas',
+  'detail.label': 'Descargar la etiqueta del mantenimiento (PDF)',
+  'detail.labelFailed': 'No se ha podido crear la etiqueta',
 
   // body
   'body.sedan': 'Berlina',
@@ -343,4 +345,15 @@ export const es: Record<TranslationKey, string> = {
   'theme.system': 'Sistema',
   'theme.light': 'Claro',
   'theme.dark': 'Oscuro',
+
+  // label
+  'label.title': 'MANTENIMIENTO REALIZADO',
+  'label.date': 'Fecha',
+  'label.mileage': 'Kilómetros',
+  'label.work': 'Trabajos realizados',
+  'label.workshop': 'Taller',
+  'label.cost': 'Coste',
+  'label.next': 'Próximo mantenimiento',
+  'label.nextUnknown': 'Consulta el plan de mantenimiento en la app',
+  'label.file': 'mantenimiento',
 };
