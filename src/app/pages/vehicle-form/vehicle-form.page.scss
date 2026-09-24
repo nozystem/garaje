@@ -79,7 +79,7 @@
   overflow: hidden;
   border-radius: 18px;
   background: #fff;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--app-art-shadow);
 }
 
 .preview__art app-car-illustration {
@@ -108,7 +108,7 @@
   background: var(--ion-color-primary);
   color: var(--ion-color-primary-contrast);
   font-size: 15px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--app-pill-shadow);
 }
 
 .preview__remove {

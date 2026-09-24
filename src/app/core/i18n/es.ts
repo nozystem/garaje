@@ -129,6 +129,7 @@ export const es: Record<TranslationKey, string> = {
   'settings.deleteTitle': '¿Eliminar tu cuenta?',
   'settings.deleteText': 'Se borrarán tus vehículos, su historial y las tareas programadas. No se puede deshacer.',
   'settings.deleteConfirm': 'Eliminar cuenta',
+  'settings.appearance': 'Apariencia',
 
   // preset
   'preset.oil': 'Cambio de aceite y filtro',
@@ -329,4 +330,9 @@ export const es: Record<TranslationKey, string> = {
   'ai.inKm': 'en {km}',
   'ai.lateKm': '{km} pasada',
   'ai.note': 'Sugerido por IA a partir del calendario habitual del fabricante. Revisa el libro de mantenimiento: tu coche puede variar. Con "No lo sé" se supone que cada tarea se hizo a su tiempo, en su último intervalo.',
+
+  // theme
+  'theme.system': 'Sistema',
+  'theme.light': 'Claro',
+  'theme.dark': 'Oscuro',
 };

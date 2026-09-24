@@ -32,6 +32,19 @@
     }
   </ion-segment>
 
+  <h3 class="group">{{ 'settings.appearance' | t }}</h3>
+  <ion-segment
+    class="language"
+    [value]="theme.mode()"
+    (ionChange)="theme.setMode($any($event.detail.value))"
+  >
+    @for (mode of themeModes; track mode) {
+      <ion-segment-button [value]="mode">
+        <ion-label>{{ ('theme.' + mode) | t }}</ion-label>
+      </ion-segment-button>
+    }
+  </ion-segment>
+
   <h3 class="group">{{ 'settings.content' | t }}</h3>
   <div class="card">
     <div class="counts">

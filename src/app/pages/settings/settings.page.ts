@@ -29,6 +29,7 @@ import { TranslatePipe } from '../../core/i18n/i18n.pipes';
 import { I18n, LANGUAGES } from '../../core/i18n/i18n.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GarageStore } from '../../core/services/garage.store';
+import { THEME_MODES, ThemeService } from '../../core/services/theme.service';
 
 @Component({
   selector: 'app-settings',
@@ -47,6 +48,8 @@ export class SettingsPage {
   readonly store = inject(GarageStore);
   readonly i18n = inject(I18n);
   readonly languages = LANGUAGES;
+  readonly theme = inject(ThemeService);
+  readonly themeModes = THEME_MODES;
 
   readonly counts = computed(() => ({
     vehicles: this.store.vehicles().length,

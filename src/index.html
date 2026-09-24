@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>Ionic App</title>
+  <title>Garaje</title>
 
   <base href="/" />
 
@@ -17,6 +17,18 @@
   <!-- add to homescreen for ios -->
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+  <!-- Aplica el modo claro u oscuro antes de que arranque la app, para que no
+       se vea un instante con el tema equivocado. Misma lógica que ThemeService. -->
+  <script>
+    (function () {
+      var mode = 'system';
+      try { mode = localStorage.getItem('garaje.theme') || 'system'; } catch (e) {}
+      var dark = mode === 'dark' ||
+        (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('ion-palette-dark');
+    })();
+  </script>
 </head>
 
 <body>

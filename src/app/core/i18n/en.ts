@@ -130,6 +130,7 @@ export const en = {
   'settings.deleteTitle': 'Delete your account?',
   'settings.deleteText': 'Your vehicles, their history and scheduled tasks will be deleted. This cannot be undone.',
   'settings.deleteConfirm': 'Delete account',
+  'settings.appearance': 'Appearance',
 
   // preset
   'preset.oil': 'Oil and filter change',
@@ -330,6 +331,11 @@ export const en = {
   'ai.inKm': 'in {km}',
   'ai.lateKm': '{km} late',
   'ai.note': 'Suggested by AI from the manufacturer\'s usual schedule. Check your service book: your car may differ. With "Don\'t know", each task is assumed done on time at its last interval.',
+
+  // theme
+  'theme.system': 'System',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1,12 +1,107 @@
 /**
- * Tema de la aplicación.
+ * Tema de la aplicación, en claro y en oscuro.
  *
- * Paleta oscura con un ámbar como color principal: evoca el salpicadero de un
- * coche, se distingue del azul por defecto de Ionic y contrasta bien con los
- * rojos y verdes que usa la app para el estado de los mantenimientos.
+ * El color principal es un ámbar que evoca el salpicadero de un coche, se
+ * distingue del azul por defecto de Ionic y contrasta con los rojos y verdes
+ * del estado de los mantenimientos. En claro los colores se oscurecen para
+ * leerse sobre blanco (todos a 4.5:1 o más sobre las tarjetas).
+ *
+ * El claro va en :root y el oscuro en :root.ion-palette-dark, clase que pone
+ * ThemeService según lo elegido en Settings o lo que diga el sistema.
  */
 
 :root {
+  color-scheme: light;
+
+  /* Radios propios, más generosos que los de Ionic. */
+  --app-radius: 18px;
+  --app-radius-sm: 12px;
+
+  /* Sombras: en claro más suaves, sobre fondo claro se notan más. */
+  --app-shadow: 0 8px 24px rgba(20, 20, 40, 0.08);
+  --app-art-shadow: 0 10px 24px rgba(20, 20, 40, 0.12);
+  --app-pill-shadow: 0 2px 6px rgba(20, 20, 40, 0.2);
+
+  --ion-color-primary: #a35e00;
+  --ion-color-primary-rgb: 163, 94, 0;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #8f5300;
+  --ion-color-primary-tint: #ac6e1a;
+
+  --ion-color-warning: #976100;
+  --ion-color-warning-rgb: 151, 97, 0;
+  --ion-color-warning-contrast: #ffffff;
+  --ion-color-warning-contrast-rgb: 255, 255, 255;
+  --ion-color-warning-shade: #855500;
+  --ion-color-warning-tint: #a1711a;
+
+  --ion-color-success: #15834f;
+  --ion-color-success-rgb: 21, 131, 79;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #127346;
+  --ion-color-success-tint: #2c8f61;
+
+  --ion-color-danger: #cf2e42;
+  --ion-color-danger-rgb: 207, 46, 66;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #b6283a;
+  --ion-color-danger-tint: #d44355;
+
+  --ion-color-medium: #6a6a78;
+  --ion-color-medium-rgb: 106, 106, 120;
+  --ion-color-medium-contrast: #ffffff;
+  --ion-color-medium-contrast-rgb: 255, 255, 255;
+  --ion-color-medium-shade: #5d5d6a;
+  --ion-color-medium-tint: #797986;
+
+  --ion-color-secondary: #2a75b8;
+  --ion-color-secondary-rgb: 42, 117, 184;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #2567a2;
+  --ion-color-secondary-tint: #3f83bf;
+
+  --ion-background-color: #f2f2f7;
+  --ion-background-color-rgb: 242, 242, 247;
+  --ion-text-color: #16161d;
+  --ion-text-color-rgb: 22, 22, 29;
+
+  --ion-card-background: #ffffff;
+  --ion-item-background: #ffffff;
+  --ion-toolbar-background: #f7f7fa;
+  --ion-tab-bar-background: #f7f7fa;
+
+  --ion-color-step-50: #e7e7ec;
+  --ion-color-step-100: #dcdce1;
+  --ion-color-step-150: #d1d1d6;
+  --ion-color-step-200: #c6c6cb;
+  --ion-color-step-250: #bbbbc0;
+  --ion-color-step-300: #b0b0b6;
+  --ion-color-step-350: #a5a5ab;
+  --ion-color-step-400: #9a9aa0;
+  --ion-color-step-450: #8f8f95;
+  --ion-color-step-500: #84848a;
+  --ion-color-step-550: #79797f;
+  --ion-color-step-600: #6e6e74;
+  --ion-color-step-650: #636369;
+  --ion-color-step-700: #58585e;
+  --ion-color-step-750: #4d4d54;
+  --ion-color-step-800: #424249;
+  --ion-color-step-850: #37373e;
+  --ion-color-step-900: #2c2c33;
+  --ion-color-step-950: #212128;
+}
+
+:root.ion-palette-dark {
+  color-scheme: dark;
+
+  --app-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --app-art-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  --app-pill-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+
   /* Ámbar principal */
   --ion-color-primary: #f5a623;
   --ion-color-primary-rgb: 245, 166, 35;
@@ -49,14 +144,6 @@
   --ion-color-medium-shade: #7a7a88;
   --ion-color-medium-tint: #9797a4;
 
-  /* Radios y sombras propios, más generosos que los de Ionic. */
-  --app-radius: 18px;
-  --app-radius-sm: 12px;
-  --app-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-}
-
-/* La app se diseña en oscuro; el claro se deja como cortesía del sistema. */
-:root {
   --ion-background-color: #0e0e13;
   --ion-background-color-rgb: 14, 14, 19;
   --ion-text-color: #f2f2f7;
