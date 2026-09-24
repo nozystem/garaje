@@ -24,16 +24,19 @@ import {
 } from './car-facets.ts';
 import {
   generateIllustration,
+  illustrationKey,
   isConfigured as isIllustrationConfigured,
 } from './car-illustration.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
 import {
   deleteUser,
   findById,
+  findIllustration,
   getPool,
   loadSnapshot,
   remove,
   removeVehicleCascade,
+  saveIllustration,
   upsert,
 } from './store.ts';
 import type { StoredPlan, StoredRecord, StoredVehicle } from './types.ts';
@@ -231,15 +234,25 @@ async function handleVehicles(
 
   if (action === 'illustration') {
     if (method !== 'POST') return methodNotAllowed(res, ['GET', 'POST']);
-    if (!isIllustrationConfigured()) {
-      json(res, 503, { error: 'Illustrations are not configured' });
-      return;
-    }
 
-    const illustration = await generateIllustration(existing);
+    // `fresh` pide una distinta a la guardada ("New illustration"); sin él
+    // se reutiliza la de cualquier coche igual y no se paga otra imagen.
+    const fresh = (body as { fresh?: unknown } | null)?.fresh === true;
+    const key = illustrationKey(existing);
+    let illustration = fresh ? null : await findIllustration(key);
+
     if (!illustration) {
-      json(res, 502, { error: 'The illustration could not be created' });
-      return;
+      if (!isIllustrationConfigured()) {
+        json(res, 503, { error: 'Illustrations are not configured' });
+        return;
+      }
+
+      illustration = await generateIllustration(existing);
+      if (!illustration) {
+        json(res, 502, { error: 'The illustration could not be created' });
+        return;
+      }
+      await saveIllustration(key, illustration);
     }
 
     const updated: StoredVehicle = {

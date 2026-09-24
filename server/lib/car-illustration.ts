@@ -32,6 +32,25 @@ const COLOR_NAMES: Record<string, string> = {
 
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth'];
 
+/** Minúsculas, sin tildes ni espacios sobrantes: "León" y "leon " son lo mismo. */
+function plain(text: string | undefined): string {
+  return (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+/**
+ * Identifica lo que se ve en la ilustración, para reutilizarla entre coches
+ * iguales. Con generación el año sobra: dentro de ella el coche no cambia.
+ */
+export function illustrationKey(q: IllustrationQuery): string {
+  return [
+    plain(q.make),
+    plain(q.model),
+    plain(q.generation) || String(q.year),
+    plain(q.body) || 'car',
+    plain(q.color) || 'silver',
+  ].join('|');
+}
+
 export function isConfigured(): boolean {
   return Boolean(process.env['GEMINI_API_KEY']);
 }

@@ -188,10 +188,32 @@ async function ensureSchema(p) {
       data JSONB NOT NULL
     );
 
+    -- Ilustraciones compartidas entre todos los usuarios: dos coches con la
+    -- misma marca, modelo, generaci\xF3n, carrocer\xEDa y color reutilizan la misma
+    -- imagen en vez de pagar otra.
+    CREATE TABLE IF NOT EXISTS illustrations (
+      key TEXT PRIMARY KEY,
+      image TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
   `);
+}
+async function findIllustration(key) {
+  const p = await getPool();
+  const result = await p.query("SELECT image FROM illustrations WHERE key = $1", [key]);
+  return result.rows[0]?.["image"] ?? null;
+}
+async function saveIllustration(key, image) {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO illustrations (key, image) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, created_at = now()`,
+    [key, image]
+  );
 }
 async function createUser(user) {
   const p = await getPool();
@@ -483,6 +505,18 @@ var COLOR_NAMES = {
   "#e67e22": "orange"
 };
 var ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
+function plain2(text) {
+  return (text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+function illustrationKey(q) {
+  return [
+    plain2(q.make),
+    plain2(q.model),
+    plain2(q.generation) || String(q.year),
+    plain2(q.body) || "car",
+    plain2(q.color) || "silver"
+  ].join("|");
+}
 function isConfigured2() {
   return Boolean(process.env["GEMINI_API_KEY"]);
 }
@@ -936,14 +970,20 @@ async function handleVehicles(res, method, userId, id, action, body) {
   }
   if (action === "illustration") {
     if (method !== "POST") return methodNotAllowed(res, ["GET", "POST"]);
-    if (!isConfigured2()) {
-      json(res, 503, { error: "Illustrations are not configured" });
-      return;
-    }
-    const illustration = await generateIllustration(existing);
+    const fresh = body?.fresh === true;
+    const key = illustrationKey(existing);
+    let illustration = fresh ? null : await findIllustration(key);
     if (!illustration) {
-      json(res, 502, { error: "The illustration could not be created" });
-      return;
+      if (!isConfigured2()) {
+        json(res, 503, { error: "Illustrations are not configured" });
+        return;
+      }
+      illustration = await generateIllustration(existing);
+      if (!illustration) {
+        json(res, 502, { error: "The illustration could not be created" });
+        return;
+      }
+      await saveIllustration(key, illustration);
     }
     const updated = {
       ...existing,

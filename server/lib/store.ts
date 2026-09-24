@@ -78,10 +78,37 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
       data JSONB NOT NULL
     );
 
+    -- Ilustraciones compartidas entre todos los usuarios: dos coches con la
+    -- misma marca, modelo, generación, carrocería y color reutilizan la misma
+    -- imagen en vez de pagar otra.
+    CREATE TABLE IF NOT EXISTS illustrations (
+      key TEXT PRIMARY KEY,
+      image TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
   `);
+}
+
+/* --- Ilustraciones --------------------------------------------------------- */
+
+export async function findIllustration(key: string): Promise<string | null> {
+  const p = await getPool();
+  const result = await p.query('SELECT image FROM illustrations WHERE key = $1', [key]);
+  return (result.rows[0]?.['image'] as string | undefined) ?? null;
+}
+
+/** Guarda la ilustración de ese coche, sustituyendo la anterior si la había. */
+export async function saveIllustration(key: string, image: string): Promise<void> {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO illustrations (key, image) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, created_at = now()`,
+    [key, image]
+  );
 }
 
 /* --- Usuarios -------------------------------------------------------------- */

@@ -112,14 +112,15 @@ export class GarageStore {
   }
 
   /**
-   * Pide a la IA una ilustración del coche. Tarda unos segundos: se lanza en
-   * segundo plano y la tarjeta muestra un indicador mientras tanto.
+   * Pide la ilustración del coche. Si ya existe una de un coche igual llega
+   * al instante; si no, la IA tarda unos segundos y la pantalla muestra un
+   * indicador. Con `fresh` se pide siempre una nueva, distinta de la guardada.
    */
-  async illustrate(id: string): Promise<void> {
+  async illustrate(id: string, fresh = false): Promise<void> {
     if (this._illustrating().has(id)) return;
     this._illustrating.update((ids) => new Set(ids).add(id));
     try {
-      this.replaceVehicle(await firstValueFrom(this.api.illustrateVehicle(id)));
+      this.replaceVehicle(await firstValueFrom(this.api.illustrateVehicle(id, fresh)));
     } finally {
       this._illustrating.update((ids) => {
         const next = new Set(ids);
