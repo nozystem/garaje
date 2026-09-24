@@ -1,43 +1,67 @@
-<ion-card
+<button
+  type="button"
   class="vehicle"
-  button
-  (click)="open.emit(vehicle().id)"
   [style.--accent]="vehicle().color || 'var(--ion-color-primary)'"
+  (click)="open.emit(vehicle().id)"
 >
-  <ion-card-content class="vehicle__content">
-    <div class="vehicle__icon" [class.vehicle__icon--art]="!vehicle().photo && vehicle().illustration">
-      @if (vehicle().photo) {
-        <img [src]="vehicle().photo" alt="" />
-      } @else if (vehicle().illustration; as illustration) {
-        <app-car-illustration
-          [src]="illustration"
-          [color]="vehicle().color"
-          [version]="vehicle().illustrationVersion"
-        ></app-car-illustration>
-      } @else {
-        <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
-      }
-    </div>
+  <div class="vehicle__art" [class.vehicle__art--white]="!vehicle().photo && vehicle().illustration">
+    @if (vehicle().photo) {
+      <img [src]="vehicle().photo" alt="" />
+    } @else if (vehicle().illustration; as illustration) {
+      <app-car-illustration
+        [src]="illustration"
+        [color]="vehicle().color"
+        [version]="vehicle().illustrationVersion"
+      ></app-car-illustration>
+    } @else {
+      <ion-icon name="car-sport-outline" aria-hidden="true"></ion-icon>
+    }
 
-    <div class="vehicle__info">
-      <h2 class="vehicle__name">{{ vehicle().nickname }}</h2>
-      <p class="vehicle__model">
-        {{ vehicle().make }} {{ vehicle().model }} · {{ vehicle().year }}
-      </p>
-      <ion-note class="vehicle__km">
-        {{ vehicle().mileage | km }} · {{ ('fuel.' + vehicle().fuel) | t }}
-      </ion-note>
-    </div>
-
-    <div class="vehicle__status">
-      @if (overdue > 0) {
-        <ion-badge color="danger">{{ (overdue === 1 ? 'card.overdueOne' : 'card.overdueMany') | t: { n: overdue } }}</ion-badge>
-      } @else if (dueSoon > 0) {
-        <ion-badge color="warning">{{ (dueSoon === 1 ? 'card.dueOne' : 'card.dueMany') | t: { n: dueSoon } }}</ion-badge>
+    <span class="vehicle__badge">
+      @if (overdue() > 0) {
+        <ion-badge color="danger">
+          {{ (overdue() === 1 ? 'card.overdueOne' : 'card.overdueMany') | t: { n: overdue() } }}
+        </ion-badge>
+      } @else if (dueSoon() > 0) {
+        <ion-badge color="warning">
+          {{ (dueSoon() === 1 ? 'card.dueOne' : 'card.dueMany') | t: { n: dueSoon() } }}
+        </ion-badge>
       } @else {
         <ion-badge color="success">{{ 'status.ok' | t }}</ion-badge>
       }
-      <ion-icon name="chevron-forward-outline" class="vehicle__chevron" aria-hidden="true"></ion-icon>
-    </div>
-  </ion-card-content>
-</ion-card>
+    </span>
+  </div>
+
+  <div class="vehicle__body">
+    <h2 class="vehicle__name">{{ vehicle().nickname }}</h2>
+    <p class="vehicle__model">{{ vehicle().make }} {{ vehicle().model }} · {{ vehicle().year }}</p>
+
+    <dl class="stats">
+      <div class="stat">
+        <dt><ion-icon name="speedometer-outline" [attr.aria-label]="'detail.mileage' | t"></ion-icon></dt>
+        <dd>{{ vehicle().mileage | km }}</dd>
+      </div>
+
+      @if (next(); as next) {
+        <div class="stat">
+          <dt><ion-icon name="construct-outline" [attr.aria-label]="'card.next' | t"></ion-icon></dt>
+          <dd>
+            <span class="stat__title">{{ next.plan.title }}</span>
+            <span class="stat__due" [attr.data-status]="next.status | statusColor">{{ nextRemaining() }}</span>
+          </dd>
+        </div>
+        @if (next.estimatedDueDate && next.status !== 'overdue') {
+          <div class="stat">
+            <dt><ion-icon name="calendar-outline" [attr.aria-label]="'card.nextDate' | t"></ion-icon></dt>
+            <dd>{{ next.estimatedDueDate | ldate: 'd MMM y' }}</dd>
+          </div>
+        }
+      } @else {
+        <div class="stat stat--muted">
+          <dt><ion-icon name="construct-outline" aria-hidden="true"></ion-icon></dt>
+          <dd>{{ 'card.noPlans' | t }}</dd>
+        </div>
+      }
+    </dl>
+  </div>
+</button>

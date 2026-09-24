@@ -73,6 +73,9 @@ export const en = {
   'card.overdueMany': '{n} overdue',
   'card.dueOne': '{n} due',
   'card.dueMany': '{n} due',
+  'card.next': 'Next service',
+  'card.nextDate': 'Expected date',
+  'card.noPlans': 'No maintenance set up',
 
   // plan
   'plan.approx': 'approx. {date}',

@@ -72,6 +72,9 @@ export const es: Record<TranslationKey, string> = {
   'card.overdueMany': '{n} vencidas',
   'card.dueOne': '{n} pendiente',
   'card.dueMany': '{n} pendientes',
+  'card.next': 'Próximo mantenimiento',
+  'card.nextDate': 'Fecha prevista',
+  'card.noPlans': 'Sin mantenimiento configurado',
 
   // plan
   'plan.approx': 'aprox. {date}',

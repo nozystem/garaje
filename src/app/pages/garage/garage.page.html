@@ -82,13 +82,15 @@
           <ion-icon name="car-outline"></ion-icon>
           {{ 'garage.vehicles' | t }}
         </h2>
-        @for (vehicle of store.vehicles(); track vehicle.id) {
-          <app-vehicle-card
-            [vehicle]="vehicle"
-            [alerts]="store.alertsFor(vehicle.id)"
-            (open)="openVehicle($event)"
-          ></app-vehicle-card>
-        }
+        <div class="vehicle-grid">
+          @for (vehicle of store.vehicles(); track vehicle.id) {
+            <app-vehicle-card
+              [vehicle]="vehicle"
+              [plans]="store.plansFor(vehicle.id)"
+              (open)="openVehicle($event)"
+            ></app-vehicle-card>
+          }
+        </div>
       </section>
     }
   }

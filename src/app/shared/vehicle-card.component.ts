@@ -1,46 +1,50 @@
-import { Component, input, output } from '@angular/core';
-import {
-  IonBadge,
-  IonCard,
-  IonCardContent,
-  IonIcon,
-  IonNote,
-} from '@ionic/angular';
+import { Component, computed, inject, input, output } from '@angular/core';
+import { IonBadge, IonIcon } from '@ionic/angular';
+import { addIcons } from 'ionicons';
+import { calendarOutline, constructOutline, speedometerOutline } from 'ionicons/icons';
 
+import { LocalDatePipe, TranslatePipe } from '../core/i18n/i18n.pipes';
+import { I18n } from '../core/i18n/i18n.service';
 import { PlanStatus } from '../core/models/maintenance.model';
 import { Vehicle } from '../core/models/vehicle.model';
-import { KmPipe } from './status.pipe';
-
-import { TranslatePipe } from '../core/i18n/i18n.pipes';
 import { CarIllustrationComponent } from './car-illustration.component';
+import { remainingText } from './plan-remaining';
+import { KmPipe, StatusColorPipe } from './status.pipe';
+
+/**
+ * Tarjeta de un coche en la cuadrícula del garaje: su imagen y, debajo, lo
+ * que importa de un vistazo (kilómetros y el próximo mantenimiento).
+ */
 @Component({
   selector: 'app-vehicle-card',
   templateUrl: './vehicle-card.component.html',
   styleUrl: './vehicle-card.component.scss',
   imports: [
-    CarIllustrationComponent, IonBadge, IonCard, IonCardContent, IonIcon, IonNote, KmPipe,
+    CarIllustrationComponent, IonBadge, IonIcon, KmPipe, LocalDatePipe, StatusColorPipe,
     TranslatePipe,
   ],
 })
 export class VehicleCardComponent {
+  private readonly i18n = inject(I18n);
+
   readonly vehicle = input.required<Vehicle>();
-  readonly alerts = input<PlanStatus[]>([]);
+  /** Tareas del coche, de la más urgente a la menos. */
+  readonly plans = input<PlanStatus[]>([]);
 
   readonly open = output<string>();
 
-  get overdue(): number {
-    return this.alerts().filter((a) => a.status === 'overdue').length;
-  }
+  readonly overdue = computed(() => this.plans().filter((p) => p.status === 'overdue').length);
+  readonly dueSoon = computed(() => this.plans().filter((p) => p.status === 'due-soon').length);
 
-  get dueSoon(): number {
-    return this.alerts().filter((a) => a.status === 'due-soon').length;
-  }
+  /** La tarea más urgente: la que toca antes. */
+  readonly next = computed(() => this.plans()[0] ?? null);
 
-  get typeIcon(): string {
-    switch (this.vehicle().type) {
-      case 'motorcycle': return 'bicycle-outline';
-      case 'van': return 'bus-outline';
-      default: return 'car-outline';
-    }
+  readonly nextRemaining = computed(() => {
+    const next = this.next();
+    return next ? remainingText(next, this.i18n) : '';
+  });
+
+  constructor() {
+    addIcons({ calendarOutline, constructOutline, speedometerOutline });
   }
 }
