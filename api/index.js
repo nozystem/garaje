@@ -470,8 +470,7 @@ async function carFacets(query) {
 }
 
 // server/lib/car-illustration.ts
-var ACCURATE_MODEL = "@cf/black-forest-labs/flux-2-klein-9b";
-var CHEAP_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
+var MODEL = "gemini-3.1-flash-lite-image";
 var REQUEST_TIMEOUT_MS2 = 9e4;
 var COLOR_NAMES = {
   "#e74c3c": "bright red",
@@ -483,16 +482,10 @@ var COLOR_NAMES = {
   "#5d6d7e": "slate grey",
   "#e67e22": "orange"
 };
-function credentials() {
-  const account = process.env["CLOUDFLARE_ACCOUNT_ID"];
-  const token = process.env["CLOUDFLARE_AI_TOKEN"];
-  return account && token ? { account, token } : null;
-}
-function isConfigured2() {
-  return credentials() !== null;
-}
-var FLAGGED = 3030;
 var ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
+function isConfigured2() {
+  return Boolean(process.env["GEMINI_API_KEY"]);
+}
 function generationText(generation) {
   const value = generation?.trim();
   if (!value) return "";
@@ -502,59 +495,59 @@ function generationText(generation) {
   const ordinal = ORDINALS[n - 1] ?? `${n}th`;
   return `, ${ordinal} generation (Mk${n})${match[2] ? " facelift" : ""}`;
 }
-function promptFor(q, generic = false) {
+function promptFor(q) {
   const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? "silver";
   const body = q.body?.toLowerCase() ?? "car";
-  const subject = generic ? `Side view illustration of a modern ${q.year} ${body}, painted ${color}.` : `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)} ${body}, painted ${color}. Accurate shape and details for that exact model and generation.`;
   return [
-    subject,
+    `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)},`,
+    `${body}, painted ${color}. Accurate shape and details for that exact model and generation.`,
     "Pure 90-degree side profile, the whole car visible, front of the car pointing left.",
     "Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows.",
     "Plain white background, thin soft shadow under the wheels.",
     "No text, no logos, no watermark."
   ].join(" ");
 }
-async function generateIllustration(q) {
-  const attempts = [
-    [ACCURATE_MODEL, false],
-    [CHEAP_MODEL, false],
-    [CHEAP_MODEL, true]
-  ];
-  for (const [model, generic] of attempts) {
-    const result = await draw(model, promptFor(q, generic));
-    if (result === "flagged") continue;
-    if (result) return result;
-    if (model === CHEAP_MODEL) return null;
+function findImage(node) {
+  if (!node || typeof node !== "object") return null;
+  const record = node;
+  const data = record["data"];
+  const mimeType = record["mime_type"] ?? record["mimeType"];
+  if (typeof data === "string" && typeof mimeType === "string" && mimeType.startsWith("image/")) {
+    return { data, mimeType };
+  }
+  for (const value of Object.values(record)) {
+    const found = findImage(value);
+    if (found) return found;
   }
   return null;
 }
-async function draw(model, prompt) {
-  const auth = credentials();
-  if (!auth) return null;
-  const form = new FormData();
-  form.set("prompt", prompt);
-  form.set("width", "1024");
-  form.set("height", "576");
+async function generateIllustration(q) {
+  const apiKey = process.env["GEMINI_API_KEY"];
+  if (!apiKey) return null;
   try {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${auth.account}/ai/run/${model}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${auth.token}` },
-        body: form,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
-      }
-    );
-    const body = await res.json();
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL,
+        input: [{ type: "text", text: promptFor(q) }],
+        response_format: {
+          type: "image",
+          mime_type: "image/jpeg",
+          aspect_ratio: "16:9",
+          image_size: "1K"
+        }
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
+    });
     if (!res.ok) {
-      if (body.errors?.some((e) => e.code === FLAGGED)) return "flagged";
-      console.error(`Workers AI answered ${res.status}: ${body.errors?.[0]?.message ?? ""}`);
+      console.error(`Gemini answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
       return null;
     }
-    const image = body.result?.image;
-    return typeof image === "string" ? `data:image/jpeg;base64,${image}` : null;
+    const image = findImage(await res.json());
+    return image ? `data:${image.mimeType};base64,${image.data}` : null;
   } catch (error) {
-    console.error("Workers AI illustration failed:", error);
+    console.error("Gemini illustration failed:", error);
     return null;
   }
 }
@@ -900,7 +893,7 @@ async function handleRequest(req, res) {
     case "garage": {
       if (method !== "GET") return methodNotAllowed(res, ["GET"]);
       const snapshot = await loadSnapshot(userId);
-      json(res, 200, snapshot);
+      json(res, 200, { ...snapshot, vehicles: snapshot.vehicles.map(forClient) });
       return;
     }
     case "account":
@@ -933,13 +926,16 @@ async function handleVehicles(res, method, userId, id, action, body) {
       createdAt: now
     };
     await upsert("vehicles", userId, vehicle.id, vehicle);
-    json(res, 201, vehicle);
+    json(res, 201, forClient(vehicle));
     return;
   }
   const existing = await findById("vehicles", userId, id);
   if (!existing) return notFound(res);
+  if (action === "illustration" && method === "GET") {
+    return sendIllustration(res, existing);
+  }
   if (action === "illustration") {
-    if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+    if (method !== "POST") return methodNotAllowed(res, ["GET", "POST"]);
     if (!isConfigured2()) {
       json(res, 503, { error: "Illustrations are not configured" });
       return;
@@ -949,14 +945,18 @@ async function handleVehicles(res, method, userId, id, action, body) {
       json(res, 502, { error: "The illustration could not be created" });
       return;
     }
-    const updated = { ...existing, illustration };
+    const updated = {
+      ...existing,
+      illustration,
+      illustrationAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
     await upsert("vehicles", userId, id, updated);
-    json(res, 200, updated);
+    json(res, 200, forClient(updated));
     return;
   }
   if (action) return notFound(res);
   if (method === "GET") {
-    json(res, 200, existing);
+    json(res, 200, forClient(existing));
     return;
   }
   if (method === "PUT") {
@@ -968,10 +968,11 @@ async function handleVehicles(res, method, userId, id, action, body) {
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? void 0 : existing.illustration,
+      illustrationAt: looksChanged ? void 0 : existing.illustrationAt,
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
     await upsert("vehicles", userId, id, updated);
-    json(res, 200, updated);
+    json(res, 200, forClient(updated));
     return;
   }
   if (method === "DELETE") {
@@ -1056,6 +1057,22 @@ async function handlePlans(res, method, userId, id, body) {
     return;
   }
   methodNotAllowed(res, ["PUT", "DELETE"]);
+}
+function forClient(vehicle) {
+  if (!vehicle.illustration) return vehicle;
+  const version = encodeURIComponent(vehicle.illustrationAt ?? "0");
+  return {
+    ...vehicle,
+    illustration: `/api/vehicles/${vehicle.id}/illustration?v=${version}`
+  };
+}
+function sendIllustration(res, vehicle) {
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(vehicle.illustration ?? "");
+  if (!match) return notFound(res);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", match[1]);
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.end(Buffer.from(match[2], "base64"));
 }
 
 // server/entry/vercel.ts

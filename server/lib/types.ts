@@ -33,6 +33,7 @@ export interface StoredVehicle {
   color?: string;
   photo?: string;
   illustration?: string;
+  illustrationAt?: string;
   notes?: string;
   createdAt: string;
 }

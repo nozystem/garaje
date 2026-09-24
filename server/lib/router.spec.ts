@@ -529,4 +529,16 @@ describe('vehicle illustration', () => {
 
     expect(res.status).toBe(503);
   });
+
+  it('answers 404 for the image of a vehicle without one', async () => {
+    const c = client();
+    await c.register();
+    const car = await (
+      await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
+    ).json();
+
+    const res = await c.fetch(`/api/vehicles/${car.id}/illustration`);
+
+    expect(res.status).toBe(404);
+  });
 });

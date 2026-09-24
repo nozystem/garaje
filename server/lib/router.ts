@@ -169,7 +169,7 @@ export async function handleRequest(
       if (method !== 'GET') return methodNotAllowed(res, ['GET']);
 
       const snapshot = await loadSnapshot(userId);
-      json(res, 200, snapshot);
+      json(res, 200, { ...snapshot, vehicles: snapshot.vehicles.map(forClient) });
       return;
     }
 
@@ -218,15 +218,19 @@ async function handleVehicles(
     };
 
     await upsert('vehicles', userId, vehicle.id, vehicle);
-    json(res, 201, vehicle);
+    json(res, 201, forClient(vehicle));
     return;
   }
 
   const existing = await findById<StoredVehicle>('vehicles', userId, id);
   if (!existing) return notFound(res);
 
+  if (action === 'illustration' && method === 'GET') {
+    return sendIllustration(res, existing);
+  }
+
   if (action === 'illustration') {
-    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+    if (method !== 'POST') return methodNotAllowed(res, ['GET', 'POST']);
     if (!isIllustrationConfigured()) {
       json(res, 503, { error: 'Illustrations are not configured' });
       return;
@@ -238,15 +242,19 @@ async function handleVehicles(
       return;
     }
 
-    const updated: StoredVehicle = { ...existing, illustration };
+    const updated: StoredVehicle = {
+      ...existing,
+      illustration,
+      illustrationAt: new Date().toISOString(),
+    };
     await upsert('vehicles', userId, id, updated);
-    json(res, 200, updated);
+    json(res, 200, forClient(updated));
     return;
   }
   if (action) return notFound(res);
 
   if (method === 'GET') {
-    json(res, 200, existing);
+    json(res, 200, forClient(existing));
     return;
   }
 
@@ -271,6 +279,7 @@ async function handleVehicles(
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? undefined : existing.illustration,
+      illustrationAt: looksChanged ? undefined : existing.illustrationAt,
       mileageUpdatedAt:
         parsed.value.mileage !== existing.mileage
           ? new Date().toISOString()
@@ -278,7 +287,7 @@ async function handleVehicles(
     };
 
     await upsert('vehicles', userId, id, updated);
-    json(res, 200, updated);
+    json(res, 200, forClient(updated));
     return;
   }
 
@@ -397,4 +406,30 @@ async function handlePlans(
   }
 
   methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+/**
+ * Las ilustraciones pesan cientos de KB cada una: dentro del JSON del garaje
+ * lo harían crecer con cada coche hasta pasar el límite de respuesta de
+ * Vercel. El cliente recibe un enlace versionado y el navegador descarga y
+ * guarda en caché cada imagen por separado.
+ */
+function forClient(vehicle: StoredVehicle): StoredVehicle {
+  if (!vehicle.illustration) return vehicle;
+  const version = encodeURIComponent(vehicle.illustrationAt ?? '0');
+  return {
+    ...vehicle,
+    illustration: `/api/vehicles/${vehicle.id}/illustration?v=${version}`,
+  };
+}
+
+function sendIllustration(res: ServerResponse, vehicle: StoredVehicle): void {
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(vehicle.illustration ?? '');
+  if (!match) return notFound(res);
+
+  res.statusCode = 200;
+  res.setHeader('Content-Type', match[1]);
+  // La URL cambia con cada ilustración nueva, así que puede cachearse siempre.
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.end(Buffer.from(match[2], 'base64'));
 }
