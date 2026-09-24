@@ -355,8 +355,8 @@ export const es: Record<TranslationKey, string> = {
   'label.mileage': 'Kilómetros',
   'label.work': 'Trabajos realizados',
   'label.workshop': 'Taller',
-  'label.cost': 'Coste',
   'label.next': 'Próximo mantenimiento',
-  'label.nextUnknown': 'Consulta el plan de mantenimiento en la app',
   'label.file': 'mantenimiento',
+  'label.nextKm': 'Próximos km',
+  'label.nextDate': 'Próxima fecha',
 };

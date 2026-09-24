@@ -356,10 +356,10 @@ export const en = {
   'label.mileage': 'Mileage',
   'label.work': 'Work done',
   'label.workshop': 'Workshop',
-  'label.cost': 'Cost',
   'label.next': 'Next service',
-  'label.nextUnknown': 'See the maintenance plan in the app',
   'label.file': 'service',
+  'label.nextKm': 'Next at',
+  'label.nextDate': 'Next date',
 } as const;
 
 export type TranslationKey = keyof typeof en;

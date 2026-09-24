@@ -1,5 +1,5 @@
 import type { I18n } from '../core/i18n/i18n.service';
-import type { MaintenanceRecord } from '../core/models/maintenance.model';
+import type { MaintenanceRecord, PlanStatus } from '../core/models/maintenance.model';
 import type { Vehicle } from '../core/models/vehicle.model';
 
 export interface ServiceLabel {
@@ -29,7 +29,8 @@ export async function downloadServiceLabel(label: ServiceLabel, i18n: I18n): Pro
   const { vehicle, records } = label;
   const first = records[0];
 
-  const height = Math.max(70, 58 + records.length * LINE + (hasExtras(records) ? LINE : 0));
+  const workshop = records.find((r) => r.workshop)?.workshop;
+  const height = Math.max(70, 64 + records.length * LINE + (workshop ? LINE : 0));
   const doc = new jsPDF({ unit: 'mm', format: [WIDTH, height], orientation: height > WIDTH ? 'p' : 'l' });
   const number = (n: number) => new Intl.NumberFormat(i18n.locale()).format(Math.round(n));
   const date = (iso: string) =>
@@ -80,22 +81,17 @@ export async function downloadServiceLabel(label: ServiceLabel, i18n: I18n): Pro
     doc.text(doc.splitTextToSize(record.title, WIDTH - MARGIN * 2 - 6)[0], MARGIN + 5.5, y);
   }
 
-  // Taller y coste, si se apuntaron.
-  const workshop = records.find((r) => r.workshop)?.workshop;
-  const cost = records.reduce((sum, r) => sum + (r.cost ?? 0), 0);
-  if (workshop || cost) {
+  // Taller, si se apuntó. El coste no: la etiqueta va pegada en el coche.
+  if (workshop) {
     y += LINE + 1;
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    const parts = [
-      workshop && `${i18n.t('label.workshop')}: ${workshop}`,
-      cost && `${i18n.t('label.cost')}: ${number(cost)} €`,
-    ].filter(Boolean);
-    doc.text(doc.splitTextToSize(parts.join('   ·   '), WIDTH - MARGIN * 2)[0], MARGIN, y);
+    doc.text(doc.splitTextToSize(`${i18n.t('label.workshop')}: ${workshop}`, WIDTH - MARGIN * 2)[0], MARGIN, y);
   }
 
-  // Próximo mantenimiento, destacado abajo.
-  const boxHeight = 12;
+  // Próximo mantenimiento, destacado abajo: kilómetros y fecha.
+  const boxHeight = 17;
   const boxY = height - MARGIN - boxHeight;
   doc.setFillColor(248, 241, 230);
   doc.roundedRect(MARGIN, boxY, WIDTH - MARGIN * 2, boxHeight, 2, 2, 'F');
@@ -103,13 +99,8 @@ export async function downloadServiceLabel(label: ServiceLabel, i18n: I18n): Pro
   doc.setFontSize(7);
   doc.setTextColor(...ACCENT);
   doc.text(i18n.t('label.next').toUpperCase(), MARGIN + 3, boxY + 4.5);
-  doc.setFontSize(10);
-  doc.setTextColor(...INK);
-  const next = [
-    label.nextKm !== undefined && `${number(label.nextKm)} km`,
-    label.nextDate && date(label.nextDate),
-  ].filter(Boolean);
-  doc.text(next.length ? next.join('  ·  ') : i18n.t('label.nextUnknown'), MARGIN + 3, boxY + 9.5);
+  field(doc, i18n.t('label.nextKm'), label.nextKm !== undefined ? `${number(label.nextKm)} km` : '—', MARGIN + 3, boxY + 9.5);
+  field(doc, i18n.t('label.nextDate'), label.nextDate ? date(label.nextDate) : '—', WIDTH / 2, boxY + 9.5);
 
   const day = first.date.slice(0, 10);
   doc.save(`${i18n.t('label.file')}-${slug(vehicle.nickname)}-${day}.pdf`);
@@ -136,8 +127,56 @@ function tick(doc: import('jspdf').jsPDF, x: number, y: number): void {
   doc.setLineWidth(0.2);
 }
 
-function hasExtras(records: MaintenanceRecord[]): boolean {
-  return records.some((r) => r.workshop || r.cost);
+/**
+ * Tareas a las que corresponden los trabajos de la etiqueta: la suya si el
+ * registro salió de una; si se apuntó a mano, la del mismo nombre y, si no
+ * hay, las de la misma categoría.
+ */
+export function plansForRecords(records: MaintenanceRecord[], statuses: PlanStatus[]): PlanStatus[] {
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const found = new Set<PlanStatus>();
+
+  for (const record of records) {
+    const rules: ((s: PlanStatus) => boolean)[] = [
+      (s) => s.plan.id === record.planId,
+      (s) => same(s.plan.title, record.title),
+      (s) => s.plan.category === record.category,
+    ];
+    // La primera regla que encuentre algo decide; las siguientes son de reserva.
+    for (const rule of rules) {
+      const matches = statuses.filter(rule);
+      if (matches.length) {
+        matches.forEach((s) => found.add(s));
+        break;
+      }
+    }
+  }
+  return [...found];
+}
+
+/**
+ * Próximos kilómetros y fecha: los más cercanos de esas tareas. Si una tarea
+ * solo va por km, su fecha se estima con los km al mes (como en la app); si
+ * solo va por tiempo, sus km se estiman igual.
+ */
+export function nextService(
+  statuses: PlanStatus[],
+  mileage: number,
+  monthlyKm: number,
+  now = Date.now()
+): { km?: number; date?: string } {
+  const kms: number[] = [];
+  const dates: number[] = [];
+  for (const s of statuses) {
+    if (s.kmRemaining !== undefined) kms.push(mileage + s.kmRemaining);
+    else if (s.daysRemaining !== undefined) kms.push(mileage + (monthlyKm * s.daysRemaining) / 30.44);
+    if (s.estimatedDueDate) dates.push(new Date(s.estimatedDueDate).getTime());
+    else if (s.daysRemaining !== undefined) dates.push(now + s.daysRemaining * 86_400_000);
+  }
+  return {
+    km: kms.length ? Math.round(Math.min(...kms)) : undefined,
+    date: dates.length ? new Date(Math.min(...dates)).toISOString() : undefined,
+  };
 }
 
 function hexToRgb(hex: string): [number, number, number] {

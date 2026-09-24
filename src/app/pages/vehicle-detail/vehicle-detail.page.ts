@@ -39,7 +39,7 @@ import { CarIllustrationComponent } from '../../shared/car-illustration.componen
 import { PlanDraft, PlanFormComponent } from '../../shared/plan-form.component';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
 import { PlanSuggestionsComponent } from '../../shared/plan-suggestions.component';
-import { downloadServiceLabel } from '../../shared/service-label';
+import { downloadServiceLabel, nextService, plansForRecords } from '../../shared/service-label';
 import {
   CategoryIconPipe,
   CategoryLabelPipe,
@@ -326,26 +326,14 @@ export class VehicleDetailPage implements OnInit {
     const vehicle = this.vehicle();
     if (!vehicle) return;
 
-    const plans = new Set(records.map((r) => r.planId).filter(Boolean));
-    const statuses = this.plans().filter((s) => plans.has(s.plan.id));
-
-    const kms = statuses
-      .filter((s) => s.kmRemaining !== undefined)
-      .map((s) => vehicle.mileage + s.kmRemaining!);
-    const dates = statuses
-      .filter((s) => s.daysRemaining !== undefined)
-      .map((s) => Date.now() + s.daysRemaining! * 86_400_000);
+    const next = nextService(
+      plansForRecords(records, this.plans()),
+      vehicle.mileage,
+      vehicle.monthlyMileage || 1000
+    );
 
     try {
-      await downloadServiceLabel(
-        {
-          vehicle,
-          records,
-          nextKm: kms.length ? Math.min(...kms) : undefined,
-          nextDate: dates.length ? new Date(Math.min(...dates)).toISOString() : undefined,
-        },
-        this.i18n
-      );
+      await downloadServiceLabel({ vehicle, records, nextKm: next.km, nextDate: next.date }, this.i18n);
     } catch {
       await this.toast(this.i18n.t('detail.labelFailed'), 'danger');
     }
