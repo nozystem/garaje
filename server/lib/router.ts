@@ -21,6 +21,10 @@ import {
   carFacets,
   isConfigured as isFacetsConfigured,
 } from './car-facets.ts';
+import {
+  generateIllustration,
+  isConfigured as isIllustrationConfigured,
+} from './car-illustration.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
 import { stockImageUrl } from './vehicle-image.ts';
 import {
@@ -136,7 +140,7 @@ export async function handleRequest(
   }
 
   const segments = path.split('/').filter(Boolean).slice(1);
-  const [resource, id] = segments;
+  const [resource, id, action] = segments;
 
   switch (resource) {
     case 'garage': {
@@ -156,7 +160,7 @@ export async function handleRequest(
       return;
 
     case 'vehicles':
-      return handleVehicles(res, method, userId, id, body);
+      return handleVehicles(res, method, userId, id, action, body);
 
     case 'records':
       return handleRecords(res, method, userId, id, body);
@@ -174,6 +178,7 @@ async function handleVehicles(
   method: string,
   userId: string,
   id: string | undefined,
+  action: string | undefined,
   body: unknown
 ): Promise<void> {
   if (!id) {
@@ -200,6 +205,26 @@ async function handleVehicles(
   const existing = await findById<StoredVehicle>('vehicles', userId, id);
   if (!existing) return notFound(res);
 
+  if (action === 'illustration') {
+    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+    if (!isIllustrationConfigured()) {
+      json(res, 503, { error: 'Illustrations are not configured' });
+      return;
+    }
+
+    const illustration = await generateIllustration(existing);
+    if (!illustration) {
+      json(res, 502, { error: 'The illustration could not be created' });
+      return;
+    }
+
+    const updated: StoredVehicle = { ...existing, illustration };
+    await upsert('vehicles', userId, id, updated);
+    json(res, 200, updated);
+    return;
+  }
+  if (action) return notFound(res);
+
   if (method === 'GET') {
     json(res, 200, existing);
     return;
@@ -215,9 +240,16 @@ async function handleVehicles(
       parsed.value.year !== existing.year ||
       parsed.value.type !== existing.type;
 
+    // La ilustración muestra carrocería y color: si cambian, deja de valer.
+    const looksChanged =
+      identityChanged ||
+      parsed.value.body !== existing.body ||
+      parsed.value.color !== existing.color;
+
     const updated: StoredVehicle = {
       ...existing,
       ...parsed.value,
+      illustration: looksChanged ? undefined : existing.illustration,
       stockImage: identityChanged
         ? ((await stockImageUrl(parsed.value)) ?? undefined)
         : existing.stockImage,

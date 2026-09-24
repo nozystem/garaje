@@ -20,6 +20,7 @@ export interface Vehicle {
   color?: string;
   photo?: string;
   stockImage?: string;
+  illustration?: string;
   notes?: string;
   createdAt: string;
 }

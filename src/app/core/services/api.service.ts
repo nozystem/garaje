@@ -47,6 +47,12 @@ export class ApiService {
       .pipe(catchError(this.toFriendlyError));
   }
 
+  illustrateVehicle(id: string): Observable<Vehicle> {
+    return this.http
+      .post<Vehicle>(`${this.base}/vehicles/${id}/illustration`, {}, { withCredentials: true })
+      .pipe(catchError(this.toFriendlyError));
+  }
+
   deleteVehicle(id: string): Observable<unknown> {
     return this.http
       .delete(`${this.base}/vehicles/${id}`, { withCredentials: true })

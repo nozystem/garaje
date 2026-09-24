@@ -5,9 +5,13 @@
   [style.--accent]="vehicle().color || 'var(--ion-color-primary)'"
 >
   <ion-card-content class="vehicle__content">
-    <div class="vehicle__icon">
-      @if (vehicle().photo || vehicle().stockImage) {
-        <img [src]="vehicle().photo || vehicle().stockImage" alt="" />
+    <div class="vehicle__icon" [class.vehicle__icon--art]="!vehicle().photo && vehicle().illustration">
+      @if (vehicle().photo) {
+        <img [src]="vehicle().photo" alt="" />
+      } @else if (vehicle().illustration) {
+        <img [src]="vehicle().illustration" alt="" />
+      } @else if (vehicle().stockImage) {
+        <img [src]="vehicle().stockImage" alt="" />
       } @else {
         <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>
       }

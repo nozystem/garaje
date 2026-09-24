@@ -20,6 +20,7 @@ export class GarageStore {
   private readonly _loading = signal(false);
   private readonly _loaded = signal(false);
   private readonly _error = signal<string | null>(null);
+  private readonly _illustrating = signal<ReadonlySet<string>>(new Set());
 
   readonly vehicles = this._vehicles.asReadonly();
   readonly records = this._records.asReadonly();
@@ -27,6 +28,8 @@ export class GarageStore {
   readonly loading = this._loading.asReadonly();
   readonly loaded = this._loaded.asReadonly();
   readonly error = this._error.asReadonly();
+  /** Vehículos cuya ilustración se está generando ahora mismo. */
+  readonly illustrating = this._illustrating.asReadonly();
 
   readonly planStatuses = computed<PlanStatus[]>(() => {
     const vehiclesById = new Map(this._vehicles().map((v) => [v.id, v]));
@@ -96,13 +99,44 @@ export class GarageStore {
   async addVehicle(draft: VehicleDraft): Promise<Vehicle> {
     const vehicle = await firstValueFrom(this.api.createVehicle(draft));
     this._vehicles.update((list) => [...list, vehicle]);
+    this.illustrateIfMissing(vehicle);
     return vehicle;
   }
 
   async updateVehicle(id: string, draft: VehicleDraft): Promise<Vehicle> {
     const updated = await firstValueFrom(this.api.updateVehicle(id, draft));
-    this._vehicles.update((list) => list.map((v) => (v.id === id ? updated : v)));
+    this.replaceVehicle(updated);
+    this.illustrateIfMissing(updated);
     return updated;
+  }
+
+  /**
+   * Pide a la IA una ilustración del coche. Tarda unos segundos: se lanza en
+   * segundo plano y la tarjeta muestra un indicador mientras tanto.
+   */
+  async illustrate(id: string): Promise<void> {
+    if (this._illustrating().has(id)) return;
+    this._illustrating.update((ids) => new Set(ids).add(id));
+    try {
+      this.replaceVehicle(await firstValueFrom(this.api.illustrateVehicle(id)));
+    } finally {
+      this._illustrating.update((ids) => {
+        const next = new Set(ids);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  private illustrateIfMissing(vehicle: Vehicle): void {
+    if (vehicle.photo || vehicle.illustration) return;
+    // Sin IA configurada o con un fallo puntual el coche sigue con la imagen
+    // de catálogo; desde el detalle se puede volver a intentar.
+    this.illustrate(vehicle.id).catch(() => undefined);
+  }
+
+  private replaceVehicle(vehicle: Vehicle): void {
+    this._vehicles.update((list) => list.map((v) => (v.id === vehicle.id ? vehicle : v)));
   }
 
   async removeVehicle(id: string): Promise<void> {

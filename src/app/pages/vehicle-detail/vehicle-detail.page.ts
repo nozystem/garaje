@@ -27,7 +27,7 @@ import {
   busOutline, calendarOutline, carSportOutline, cashOutline, checkmarkCircleOutline,
   checkmarkOutline, constructOutline, createOutline, discOutline,
   documentTextOutline, ellipseOutline, funnelOutline, speedometerOutline,
-  shieldCheckmarkOutline, syncOutline, thermometerOutline, timeOutline,
+  shieldCheckmarkOutline, sparklesOutline, syncOutline, thermometerOutline, timeOutline,
   trashOutline, waterOutline,
 } from 'ionicons/icons';
 
@@ -87,7 +87,7 @@ export class VehicleDetailPage implements OnInit {
       busOutline, calendarOutline, carSportOutline, cashOutline, checkmarkCircleOutline,
       checkmarkOutline, constructOutline, createOutline, discOutline,
       documentTextOutline, ellipseOutline, funnelOutline, speedometerOutline,
-      shieldCheckmarkOutline, syncOutline, thermometerOutline, timeOutline,
+      shieldCheckmarkOutline, sparklesOutline, syncOutline, thermometerOutline, timeOutline,
       trashOutline, waterOutline,
     });
   }
@@ -250,6 +250,14 @@ export class VehicleDetailPage implements OnInit {
       await this.store.removeVehicle(this.vehicleId());
       await this.toast('Vehicle deleted', 'success');
       void this.router.navigate(['/garage']);
+    } catch (error) {
+      await this.toast((error as Error).message, 'danger');
+    }
+  }
+
+  async illustrate(id: string): Promise<void> {
+    try {
+      await this.store.illustrate(id);
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }

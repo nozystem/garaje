@@ -63,6 +63,49 @@
   filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.5));
 }
 
+/* Ilustración de la IA sobre su propio fondo blanco. */
+.hero__art {
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 16 / 9;
+  margin: 0 auto 10px;
+  border-radius: 18px;
+  background: #fff;
+  object-fit: contain;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hero__art--loading {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--ion-card-background));
+  color: var(--ion-color-medium);
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
+.hero__art--loading ion-spinner {
+  color: var(--accent);
+}
+
+.hero__illustrate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .hero__badge {
   display: grid;
   place-items: center;

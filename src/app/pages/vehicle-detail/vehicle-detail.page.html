@@ -25,7 +25,14 @@
 
       <div class="hero__body">
         @if (!v.photo) {
-          @if (v.stockImage) {
+          @if (store.illustrating().has(v.id)) {
+            <div class="hero__art hero__art--loading">
+              <ion-spinner name="crescent"></ion-spinner>
+              <span>Painting your car…</span>
+            </div>
+          } @else if (v.illustration) {
+            <img class="hero__art" [src]="v.illustration" [alt]="v.make + ' ' + v.model" />
+          } @else if (v.stockImage) {
             <img class="hero__stock" [src]="v.stockImage" [alt]="v.make + ' ' + v.model" />
           } @else {
             <div class="hero__badge">
@@ -35,6 +42,12 @@
         }
         <h1 class="hero__name">{{ v.nickname }}</h1>
         <p class="hero__model">{{ v.make }} {{ v.model }} · {{ v.year }}</p>
+        @if (!v.photo && !store.illustrating().has(v.id)) {
+          <button type="button" class="hero__illustrate" (click)="illustrate(v.id)">
+            <ion-icon name="sparkles-outline" aria-hidden="true"></ion-icon>
+            {{ v.illustration ? 'New illustration' : 'Create illustration' }}
+          </button>
+        }
         @if (v.plate) {
           <span class="plate">{{ v.plate }}</span>
         }
