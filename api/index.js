@@ -1136,7 +1136,8 @@ async function handleVehicles(res, method, userId, id, action, body) {
     const parsed = validateVehicle(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const identityChanged = parsed.value.make !== existing.make || parsed.value.model !== existing.model || parsed.value.year !== existing.year || parsed.value.type !== existing.type;
-    const looksChanged = identityChanged || parsed.value.generation !== existing.generation || parsed.value.body !== existing.body;
+    const reshaped = (before, after) => Boolean(before) && before !== after;
+    const looksChanged = identityChanged || reshaped(existing.generation, parsed.value.generation) || reshaped(existing.body, parsed.value.body);
     const updated = {
       ...existing,
       ...parsed.value,
@@ -1146,6 +1147,10 @@ async function handleVehicles(res, method, userId, id, action, body) {
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
     await upsert("vehicles", userId, id, updated);
+    const keyChanged = illustrationKey(existing) !== illustrationKey(updated);
+    if (!looksChanged && keyChanged && updated.illustration && (updated.illustrationVersion ?? 0) >= ILLUSTRATION_VERSION) {
+      await saveIllustration(illustrationKey(updated), updated.illustration);
+    }
     json(res, 200, forClient(updated));
     return;
   }

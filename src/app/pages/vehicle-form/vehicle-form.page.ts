@@ -259,21 +259,32 @@ export class VehicleFormPage implements OnInit {
     if (v.photo || !v.make || !v.model || this.customModel()) return null;
 
     const saved = this.editing();
-    const unchanged =
+    const own =
       saved?.illustration &&
       (saved.illustrationVersion ?? 0) >= PAINTABLE_ILLUSTRATION_VERSION &&
       saved.make === v.make &&
-      saved.model === v.model &&
-      (saved.generation ?? '') === v.generation &&
-      (saved.body ?? '') === v.body &&
-      (v.generation || saved.year === Number(v.year));
-    if (unchanged) return saved.illustration!;
+      saved.model === v.model
+        ? saved.illustration
+        : null;
+
+    // Igual que en el servidor: rellenar un campo que estaba vacío concreta
+    // el coche pero no lo cambia, así que su ilustración sigue valiendo.
+    const same = (before: string | undefined, after: string) => !before || before === after;
+    if (
+      own &&
+      saved!.year === Number(v.year) &&
+      same(saved!.generation, v.generation) &&
+      same(saved!.body, v.body)
+    ) {
+      return own;
+    }
 
     const params = new URLSearchParams({ make: v.make, model: v.model, year: String(v.year) });
     if (v.generation) params.set('generation', v.generation);
     if (v.body) params.set('body', v.body);
     const url = `/api/illustrations?${params}`;
-    return this.missingIllustration() === url ? null : url;
+    // Si no hay una guardada de ese coche, mejor la suya que ninguna.
+    return this.missingIllustration() === url ? own : url;
   });
 
   /** Modelos de API Ninjas, por popularidad; si no responde, los del catálogo. */

@@ -333,11 +333,15 @@ async function handleVehicles(
       parsed.value.type !== existing.type;
 
     // La ilustración muestra el coche y su carrocería; el color no, porque la
-    // app la recolorea al mostrarla.
+    // app la recolorea al mostrarla. Rellenar la generación o la carrocería
+    // cuando estaban vacías no cambia el coche, solo lo concreta: un León de
+    // 2001 al que se le pone "Mk1" sigue siendo el mismo dibujo.
+    const reshaped = (before: string | undefined, after: string | undefined) =>
+      Boolean(before) && before !== after;
     const looksChanged =
       identityChanged ||
-      parsed.value.generation !== existing.generation ||
-      parsed.value.body !== existing.body;
+      reshaped(existing.generation, parsed.value.generation) ||
+      reshaped(existing.body, parsed.value.body);
 
     const updated: StoredVehicle = {
       ...existing,
@@ -352,6 +356,15 @@ async function handleVehicles(
     };
 
     await upsert('vehicles', userId, id, updated);
+
+    // Si se concretó la generación o la carrocería, la misma ilustración vale
+    // también para quien busque el coche así descrito.
+    const keyChanged = illustrationKey(existing) !== illustrationKey(updated);
+    if (!looksChanged && keyChanged && updated.illustration &&
+        (updated.illustrationVersion ?? 0) >= ILLUSTRATION_VERSION) {
+      await saveIllustration(illustrationKey(updated), updated.illustration);
+    }
+
     json(res, 200, forClient(updated));
     return;
   }
