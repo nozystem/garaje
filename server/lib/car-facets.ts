@@ -13,10 +13,13 @@ export interface FacetValue {
 
 export type Facets = Partial<Record<FacetName, FacetValue[]>>;
 
-const FACETS = ['model', 'body', 'fuel', 'transmission', 'badge'] as const;
+const FACETS = ['model', 'generation', 'body', 'fuel', 'transmission', 'badge', 'year'] as const;
 type FacetName = (typeof FACETS)[number];
 
-const FILTERS = ['make', 'model', 'body', 'fuel', 'year'] as const;
+// No se filtra por año: la API ignora min_year/max_year en carfacets y su
+// `year` es solo el año de lanzamiento de cada versión. La generación es lo
+// que acota de verdad el coche.
+const FILTERS = ['make', 'model', 'generation', 'body', 'fuel'] as const;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MISS_TTL_MS = 10 * 60 * 1000;
@@ -49,19 +52,47 @@ export function buildQuery(input: URLSearchParams): URLSearchParams | null {
 
   for (const name of FILTERS) {
     const value = plain(input.get(name) ?? '');
-    if (!value || value.length > 60) continue;
-
-    if (name === 'year') {
-      // `year` en la API es el año de lanzamiento de cada versión; el rango
-      // incluye también las que seguían fabricándose ese año.
-      if (!/^\d{4}$/.test(value)) return null;
-      query.set('min_year', value);
-      query.set('max_year', value);
-    } else {
-      query.set(name, value.toLowerCase());
-    }
+    if (value && value.length <= 60) query.set(name, value.toLowerCase());
   }
   return query;
+}
+
+export interface Generation {
+  /** Tal como la nombra la API, p. ej. "2 generation facelift". */
+  value: string;
+  from: number;
+  /** Año en que empieza la siguiente; null si es la última. */
+  to: number | null;
+}
+
+/**
+ * Generaciones de un modelo con sus años. La API no da el rango: el inicio
+ * es el año en que se lanzaron más versiones de esa generación y el final,
+ * el inicio de la siguiente. No se usa el año mínimo porque la API tiene
+ * versiones mal fechadas (un Golf Mk2 de 1974, un Corolla E120 de 1992).
+ */
+export async function generationsFor(make: string, model: string): Promise<Generation[] | null> {
+  const base = buildQuery(new URLSearchParams({ make, model, facets: 'generation' }));
+  if (!base) return null;
+
+  const list = await carFacets(base);
+  if (!list) return null;
+
+  const starts = await Promise.all(
+    (list.generation ?? []).map(async ({ value }) => {
+      const query = buildQuery(new URLSearchParams({ make, model, generation: value, facets: 'year' }));
+      const years = query ? (await carFacets(query))?.year : undefined;
+      const launch = [...(years ?? [])].sort((a, b) => b.count - a.count)[0];
+      const from = Number(launch?.value);
+      return Number.isFinite(from) ? { value, from } : null;
+    })
+  );
+
+  const sorted = starts
+    .filter((g): g is { value: string; from: number } => g !== null)
+    .sort((a, b) => a.from - b.from);
+
+  return sorted.map((g, i) => ({ ...g, to: sorted[i + 1]?.from ?? null }));
 }
 
 export async function carFacets(query: URLSearchParams): Promise<Facets | null> {

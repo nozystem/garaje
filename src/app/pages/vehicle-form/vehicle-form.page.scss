@@ -301,6 +301,51 @@
   font-size: 14px;
 }
 
+/* --- Generación ------------------------------------------------------------ */
+
+.generations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.generation {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--ion-color-step-150);
+  border-radius: var(--app-radius-sm);
+  background: var(--ion-card-background);
+  color: var(--ion-text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease,
+    background 0.18s ease, transform 0.18s ease;
+}
+
+.generation:active {
+  transform: scale(0.96);
+}
+
+.generation__name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.generation__years {
+  font-size: 0.76rem;
+  color: var(--ion-color-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.generation--active {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.12);
+  color: var(--ion-color-primary);
+}
+
 /* --- Carrocería ------------------------------------------------------------ */
 
 .bodies {
@@ -471,6 +516,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .make-tile,
+  .generation,
   .body-option,
   .chip,
   .fuel,

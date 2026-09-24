@@ -60,6 +60,7 @@ export interface VehicleInput {
   year: number;
   type: string;
   fuel: string;
+  generation?: string;
   body?: string;
   transmission?: string;
   engine?: string;
@@ -106,6 +107,7 @@ export function validateVehicle(input: unknown): Validation<VehicleInput> {
       type: type as string,
       fuel: fuel as string,
       mileage: mileage as number,
+      generation: str(body['generation'], 40) ?? undefined,
       body: str(body['body'], 30) ?? undefined,
       transmission: str(body['transmission'], 30) ?? undefined,
       engine: str(body['engine'], 40) ?? undefined,

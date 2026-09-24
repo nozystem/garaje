@@ -10,6 +10,7 @@ export interface Vehicle {
   year: number;
   type: VehicleType;
   fuel: FuelType;
+  generation?: string;
   body?: string;
   transmission?: string;
   engine?: string;
@@ -31,6 +32,7 @@ export interface VehicleDraft {
   year: number;
   type: VehicleType;
   fuel: FuelType;
+  generation?: string;
   body?: string;
   transmission?: string;
   engine?: string;

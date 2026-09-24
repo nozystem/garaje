@@ -190,6 +190,25 @@
         </div>
       </div>
 
+      @if (generations().length) {
+        <h3 class="group">Generation</h3>
+        <div class="generations">
+          @for (generation of generations(); track generation.value) {
+            <button
+              type="button"
+              class="generation"
+              [class.generation--active]="form.value.generation === generation.value"
+              (click)="pickGeneration(generation)"
+            >
+              <span class="generation__name">{{ generationLabel(generation.value) }}</span>
+              <span class="generation__years">
+                {{ generation.from }} – {{ generation.to ?? 'now' }}
+              </span>
+            </button>
+          }
+        </div>
+      }
+
       @if (bodies().length) {
         <h3 class="group">Body</h3>
         <div class="bodies">

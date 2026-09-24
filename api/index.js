@@ -401,8 +401,8 @@ async function handleMe(req, res) {
 }
 
 // server/lib/car-facets.ts
-var FACETS = ["model", "body", "fuel", "transmission", "badge"];
-var FILTERS = ["make", "model", "body", "fuel", "year"];
+var FACETS = ["model", "generation", "body", "fuel", "transmission", "badge", "year"];
+var FILTERS = ["make", "model", "generation", "body", "fuel"];
 var CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
 var MISS_TTL_MS = 10 * 60 * 1e3;
 var REQUEST_TIMEOUT_MS = 6e3;
@@ -421,16 +421,26 @@ function buildQuery(input) {
   const query = new URLSearchParams({ facets: [...new Set(facets)].sort().join(",") });
   for (const name of FILTERS) {
     const value = plain(input.get(name) ?? "");
-    if (!value || value.length > 60) continue;
-    if (name === "year") {
-      if (!/^\d{4}$/.test(value)) return null;
-      query.set("min_year", value);
-      query.set("max_year", value);
-    } else {
-      query.set(name, value.toLowerCase());
-    }
+    if (value && value.length <= 60) query.set(name, value.toLowerCase());
   }
   return query;
+}
+async function generationsFor(make, model) {
+  const base = buildQuery(new URLSearchParams({ make, model, facets: "generation" }));
+  if (!base) return null;
+  const list = await carFacets(base);
+  if (!list) return null;
+  const starts = await Promise.all(
+    (list.generation ?? []).map(async ({ value }) => {
+      const query = buildQuery(new URLSearchParams({ make, model, generation: value, facets: "year" }));
+      const years = query ? (await carFacets(query))?.year : void 0;
+      const launch = [...years ?? []].sort((a, b) => b.count - a.count)[0];
+      const from = Number(launch?.value);
+      return Number.isFinite(from) ? { value, from } : null;
+    })
+  );
+  const sorted = starts.filter((g) => g !== null).sort((a, b) => a.from - b.from);
+  return sorted.map((g, i) => ({ ...g, to: sorted[i + 1]?.from ?? null }));
 }
 async function carFacets(query) {
   const apiKey = process.env["API_NINJAS_KEY"];
@@ -482,10 +492,20 @@ function isConfigured2() {
   return credentials() !== null;
 }
 var FLAGGED = 3030;
+var ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
+function generationText(generation) {
+  const value = generation?.trim();
+  if (!value) return "";
+  const match = /^(\d+) generation( facelift)?/i.exec(value);
+  if (!match) return `, ${value} generation`;
+  const n = Number(match[1]);
+  const ordinal = ORDINALS[n - 1] ?? `${n}th`;
+  return `, ${ordinal} generation (Mk${n})${match[2] ? " facelift" : ""}`;
+}
 function promptFor(q, generic = false) {
   const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? "silver";
   const body = q.body?.toLowerCase() ?? "car";
-  const subject = generic ? `Side view illustration of a modern ${q.year} ${body}, painted ${color}.` : `Side view illustration of a ${q.year} ${q.make} ${q.model} ${body}, painted ${color}. Accurate shape and details for that exact model and generation.`;
+  const subject = generic ? `Side view illustration of a modern ${q.year} ${body}, painted ${color}.` : `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)} ${body}, painted ${color}. Accurate shape and details for that exact model and generation.`;
   return [
     subject,
     "Pure 90-degree side profile, the whole car visible, front of the car pointing left.",
@@ -702,6 +722,7 @@ function validateVehicle(input) {
       type,
       fuel,
       mileage,
+      generation: str(body["generation"], 40) ?? void 0,
       body: str(body["body"], 30) ?? void 0,
       transmission: str(body["transmission"], 30) ?? void 0,
       engine: str(body["engine"], 40) ?? void 0,
@@ -829,6 +850,24 @@ async function handleRequest(req, res) {
     unauthorized(res);
     return;
   }
+  if (path === "/api/catalog/generations") {
+    if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+    if (!isConfigured()) {
+      json(res, 503, { error: "Car data is not configured" });
+      return;
+    }
+    const make = url.searchParams.get("make") ?? "";
+    const model = url.searchParams.get("model") ?? "";
+    if (!make.trim() || !model.trim()) return badRequest(res, ["Make and model are required"]);
+    const generations = await generationsFor(make, model);
+    if (!generations) {
+      json(res, 502, { error: "Car data is not available right now" });
+      return;
+    }
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    json(res, 200, { generations });
+    return;
+  }
   if (path === "/api/catalog/facets") {
     if (method !== "GET") return methodNotAllowed(res, ["GET"]);
     if (!isConfigured()) {
@@ -924,7 +963,7 @@ async function handleVehicles(res, method, userId, id, action, body) {
     const parsed = validateVehicle(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const identityChanged = parsed.value.make !== existing.make || parsed.value.model !== existing.model || parsed.value.year !== existing.year || parsed.value.type !== existing.type;
-    const looksChanged = identityChanged || parsed.value.body !== existing.body || parsed.value.color !== existing.color;
+    const looksChanged = identityChanged || parsed.value.generation !== existing.generation || parsed.value.body !== existing.body || parsed.value.color !== existing.color;
     const updated = {
       ...existing,
       ...parsed.value,

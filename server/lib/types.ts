@@ -22,6 +22,7 @@ export interface StoredVehicle {
   year: number;
   type: string;
   fuel: string;
+  generation?: string;
   body?: string;
   transmission?: string;
   engine?: string;

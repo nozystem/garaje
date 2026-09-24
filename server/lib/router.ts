@@ -19,6 +19,7 @@ import {
 import {
   buildQuery as buildFacetQuery,
   carFacets,
+  generationsFor,
   isConfigured as isFacetsConfigured,
 } from './car-facets.ts';
 import {
@@ -108,6 +109,28 @@ export async function handleRequest(
   }
 
   // Detrás del login: cada consulta gasta cuota de API Ninjas.
+  if (path === '/api/catalog/generations') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    if (!isFacetsConfigured()) {
+      json(res, 503, { error: 'Car data is not configured' });
+      return;
+    }
+
+    const make = url.searchParams.get('make') ?? '';
+    const model = url.searchParams.get('model') ?? '';
+    if (!make.trim() || !model.trim()) return badRequest(res, ['Make and model are required']);
+
+    const generations = await generationsFor(make, model);
+    if (!generations) {
+      json(res, 502, { error: 'Car data is not available right now' });
+      return;
+    }
+
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    json(res, 200, { generations });
+    return;
+  }
+
   if (path === '/api/catalog/facets') {
     if (method !== 'GET') return methodNotAllowed(res, ['GET']);
     if (!isFacetsConfigured()) {
@@ -240,6 +263,7 @@ async function handleVehicles(
     // La ilustración muestra carrocería y color: si cambian, deja de valer.
     const looksChanged =
       identityChanged ||
+      parsed.value.generation !== existing.generation ||
       parsed.value.body !== existing.body ||
       parsed.value.color !== existing.color;
 

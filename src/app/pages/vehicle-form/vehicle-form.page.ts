@@ -54,6 +54,7 @@ import {
   FacetName,
   Facets,
   FacetValue,
+  Generation,
 } from '../../core/services/catalog.service';
 import { PhotoService } from '../../core/services/photo.service';
 import { GarageStore } from '../../core/services/garage.store';
@@ -86,6 +87,14 @@ type Picker = 'make' | 'model';
 function label(value: string): string {
   const text = value.replace(/_/g, ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Etiqueta corta de una generación: "2 generation facelift" pasa a
+ * "Mk2 facelift"; los códigos de chasis ("E46", "Mk5/A5") se dejan tal cual.
+ */
+function generationLabel(value: string): string {
+  return value.replace(/^(\d+) generation/i, 'Mk$1');
 }
 
 function values(list: FacetValue[] | undefined): string[] {
@@ -163,6 +172,7 @@ export class VehicleFormPage implements OnInit {
       [Validators.required, Validators.min(1900), Validators.max(new Date().getFullYear() + 1)],
     ],
     fuel: ['gasoline' as FuelType, Validators.required],
+    generation: [''],
     body: [''],
     transmission: [''],
     engine: [''],
@@ -185,18 +195,38 @@ export class VehicleFormPage implements OnInit {
     v.make ? { make: v.make } : null
   );
   private readonly bodyFacets = this.facetsFor(['body'], (v) =>
-    v.make && v.model ? { make: v.make, model: v.model, year: v.year } : null
+    v.make && v.model ? { make: v.make, model: v.model, generation: v.generation } : null
   );
   private readonly fuelFacets = this.facetsFor(['fuel'], (v) =>
     v.make && v.model
-      ? { make: v.make, model: v.model, year: v.year, body: v.body }
+      ? { make: v.make, model: v.model, generation: v.generation, body: v.body }
       : null
   );
   private readonly specFacets = this.facetsFor(['transmission', 'badge'], (v) =>
     v.make && v.model
-      ? { make: v.make, model: v.model, year: v.year, body: v.body, fuel: v.fuel }
+      ? { make: v.make, model: v.model, generation: v.generation, body: v.body, fuel: v.fuel }
       : null
   );
+
+  /** Generaciones del modelo elegido, de la más antigua a la más reciente. */
+  readonly generations = toSignal(
+    toObservable(
+      computed(() => {
+        const { make, model } = this.value();
+        return make && model && !this.customModel() ? JSON.stringify([make, model]) : null;
+      })
+    ).pipe(
+      distinctUntilChanged(),
+      switchMap((key) => {
+        if (!key) return of([] as Generation[]);
+        const [make, model] = JSON.parse(key) as [string, string];
+        return from(this.catalog.generations(make, model));
+      })
+    ),
+    { initialValue: [] as Generation[] }
+  );
+
+  readonly generationLabel = generationLabel;
 
   /** Modelos de API Ninjas, por popularidad; si no responde, los del catálogo. */
   readonly models = computed(() => {
@@ -258,6 +288,7 @@ export class VehicleFormPage implements OnInit {
       model: vehicle.model,
       year: vehicle.year,
       fuel: vehicle.fuel,
+      generation: vehicle.generation ?? '',
       body: vehicle.body ?? '',
       transmission: vehicle.transmission ?? '',
       engine: vehicle.engine ?? '',
@@ -289,14 +320,39 @@ export class VehicleFormPage implements OnInit {
   pickMake(make: string): void {
     this.selectedMake.set(make);
     this.customModel.set(false);
-    this.form.patchValue({ make, model: '', body: '', transmission: '', engine: '' });
+    this.form.patchValue({
+      make, model: '', generation: '', body: '', transmission: '', engine: '',
+    });
     this.closePicker();
   }
 
   pickModel(model: string | null): void {
     this.customModel.set(model === null);
-    this.form.patchValue({ model: model ?? '', body: '', transmission: '', engine: '' });
+    this.form.patchValue({
+      model: model ?? '', generation: '', body: '', transmission: '', engine: '',
+    });
     this.closePicker();
+  }
+
+  /**
+   * Elegir la generación sustituye a teclear el año: se pone el primero de
+   * la generación salvo que el año escrito ya caiga dentro de ella.
+   */
+  pickGeneration(generation: Generation): void {
+    if (this.form.controls.generation.value === generation.value) {
+      this.form.patchValue({ generation: '' });
+      return;
+    }
+
+    const year = Number(this.form.controls.year.value);
+    const end = generation.to ?? new Date().getFullYear();
+    const inside = year >= generation.from && year <= end;
+    this.form.patchValue({
+      generation: generation.value,
+      year: inside ? year : generation.from,
+      transmission: '',
+      engine: '',
+    });
   }
 
   /** Pulsar la opción elegida la deselecciona. */
@@ -350,9 +406,7 @@ export class VehicleFormPage implements OnInit {
     filters: (value: FormValue) => FacetFilters | null
   ): Signal<Facets> {
     const query = computed(() => {
-      const value = this.value();
-      const year = Number(value.year);
-      const result = filters({ ...value, year: year >= 1900 && year <= 2100 ? year : 0 });
+      const result = filters(this.value());
       return result ? JSON.stringify(result) : null;
     });
 

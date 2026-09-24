@@ -10,6 +10,7 @@ export interface IllustrationQuery {
   make: string;
   model: string;
   year: number;
+  generation?: string;
   body?: string;
   color?: string;
 }
@@ -45,6 +46,25 @@ export function isConfigured(): boolean {
 /** Código de Workers AI cuando su filtro rechaza la imagen generada. */
 const FLAGGED = 3030;
 
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth'];
+
+/**
+ * El año solo no basta para que el modelo acierte la generación. API Ninjas
+ * la nombra a veces por número ("2 generation facelift", que pasa a "second
+ * generation (Mk2) facelift") y a veces por código de chasis ("E46", "Mk5/A5").
+ */
+function generationText(generation: string | undefined): string {
+  const value = generation?.trim();
+  if (!value) return '';
+
+  const match = /^(\d+) generation( facelift)?/i.exec(value);
+  if (!match) return `, ${value} generation`;
+
+  const n = Number(match[1]);
+  const ordinal = ORDINALS[n - 1] ?? `${n}th`;
+  return `, ${ordinal} generation (Mk${n})${match[2] ? ' facelift' : ''}`;
+}
+
 /** Con `generic` se describe el coche sin marca ni modelo. */
 function promptFor(q: IllustrationQuery, generic = false): string {
   const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? 'silver';
@@ -52,7 +72,8 @@ function promptFor(q: IllustrationQuery, generic = false): string {
 
   const subject = generic
     ? `Side view illustration of a modern ${q.year} ${body}, painted ${color}.`
-    : `Side view illustration of a ${q.year} ${q.make} ${q.model} ${body}, painted ${color}. ` +
+    : `Side view illustration of a ${q.year} ${q.make} ${q.model}${generationText(q.generation)} ` +
+      `${body}, painted ${color}. ` +
       'Accurate shape and details for that exact model and generation.';
 
   return [

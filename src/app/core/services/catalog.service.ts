@@ -19,6 +19,14 @@ export interface CatalogMake {
 
 export type FacetName = 'model' | 'body' | 'fuel' | 'transmission' | 'badge';
 
+export interface Generation {
+  /** Tal como la nombra la API, p. ej. "2 generation facelift" o "E46". */
+  value: string;
+  from: number;
+  /** Año en que empieza la siguiente; null si es la última. */
+  to: number | null;
+}
+
 export interface FacetValue {
   value: string;
   count: number;
@@ -29,7 +37,7 @@ export type Facets = Partial<Record<FacetName, FacetValue[]>>;
 export interface FacetFilters {
   make?: string;
   model?: string;
-  year?: number;
+  generation?: string;
   body?: string;
   fuel?: string;
 }
@@ -45,6 +53,7 @@ export class CatalogService {
   private readonly http = inject(HttpClient);
   private readonly cache = new Map<VehicleType, CatalogMake[]>();
   private readonly facetCache = new Map<string, Promise<Facets>>();
+  private readonly generationCache = new Map<string, Promise<Generation[]>>();
 
   readonly loading = signal(false);
   readonly failed = signal(false);
@@ -94,6 +103,25 @@ export class CatalogService {
         return {};
       });
     this.facetCache.set(key, request);
+    return request;
+  }
+
+  /** Generaciones de un modelo con sus años; [] si no hay datos. */
+  async generations(make: string, model: string): Promise<Generation[]> {
+    const params = new URLSearchParams({ make, model });
+    const key = params.toString();
+    const cached = this.generationCache.get(key);
+    if (cached) return cached;
+
+    const request = firstValueFrom(
+      this.http.get<{ generations: Generation[] }>(`/api/catalog/generations?${key}`)
+    )
+      .then((response) => response.generations)
+      .catch(() => {
+        this.generationCache.delete(key);
+        return [];
+      });
+    this.generationCache.set(key, request);
     return request;
   }
 
