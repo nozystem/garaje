@@ -97,7 +97,12 @@ npm start          # app on :4200, proxying /api
 POSTGRES_URL=postgres://user@127.0.0.1:5432/garage
 AUTH_SECRET=anything-longer-than-32-characters-for-local
 CAR_IMAGES_API_KEY=your-key-from-carimagesapi.com
+API_NINJAS_KEY=your-key-from-api-ninjas.com
 ```
+
+`API_NINJAS_KEY` feeds the guided form (models, body, gearbox and engine per
+car) from the free `/v2/carfacets` endpoint. Without it the form falls back to
+the local catalogue.
 
 Point it at a local database, never at the deployed one. Development wipes
 tables between test runs, and production data should never be within reach of

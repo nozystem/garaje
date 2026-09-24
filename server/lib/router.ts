@@ -16,6 +16,11 @@ import {
   handleRegister,
   userIdFrom,
 } from './auth.ts';
+import {
+  buildQuery as buildFacetQuery,
+  carFacets,
+  isConfigured as isFacetsConfigured,
+} from './car-facets.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
 import { stockImageUrl } from './vehicle-image.ts';
 import {
@@ -96,6 +101,27 @@ export async function handleRequest(
   const userId = userIdFrom(req);
   if (!userId) {
     unauthorized(res);
+    return;
+  }
+
+  // Detrás del login: cada consulta gasta cuota de API Ninjas.
+  if (path === '/api/catalog/facets') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    if (!isFacetsConfigured()) {
+      json(res, 503, { error: 'Car data is not configured' });
+      return;
+    }
+
+    const query = buildFacetQuery(url.searchParams);
+    if (!query) return badRequest(res, ['Invalid facet query']);
+
+    const facets = await carFacets(query);
+    if (!facets) {
+      json(res, 502, { error: 'Car data is not available right now' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    json(res, 200, { facets });
     return;
   }
 

@@ -17,6 +17,23 @@ export interface CatalogMake {
   sources: ('open-vehicle-db' | 'local')[];
 }
 
+export type FacetName = 'model' | 'body' | 'fuel' | 'transmission' | 'badge';
+
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export type Facets = Partial<Record<FacetName, FacetValue[]>>;
+
+export interface FacetFilters {
+  make?: string;
+  model?: string;
+  year?: number;
+  body?: string;
+  fuel?: string;
+}
+
 interface CatalogResponse {
   count: number;
   modelCount: number;
@@ -27,6 +44,7 @@ interface CatalogResponse {
 export class CatalogService {
   private readonly http = inject(HttpClient);
   private readonly cache = new Map<VehicleType, CatalogMake[]>();
+  private readonly facetCache = new Map<string, Promise<Facets>>();
 
   readonly loading = signal(false);
   readonly failed = signal(false);
@@ -50,6 +68,33 @@ export class CatalogService {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Valores posibles de cada faceta para los filtros dados, según API Ninjas.
+   * Si el servicio no está disponible devuelve {} y el formulario sigue
+   * funcionando solo con el catálogo local.
+   */
+  async facets(filters: FacetFilters, facets: FacetName[]): Promise<Facets> {
+    const params = new URLSearchParams({ facets: facets.join(',') });
+    for (const [name, value] of Object.entries(filters)) {
+      if (value) params.set(name, String(value));
+    }
+
+    const key = params.toString();
+    const cached = this.facetCache.get(key);
+    if (cached) return cached;
+
+    const request = firstValueFrom(
+      this.http.get<{ facets: Facets }>(`/api/catalog/facets?${key}`)
+    )
+      .then((response) => response.facets)
+      .catch(() => {
+        this.facetCache.delete(key);
+        return {};
+      });
+    this.facetCache.set(key, request);
+    return request;
   }
 
   modelsFor(makes: CatalogMake[], makeName: string): string[] {

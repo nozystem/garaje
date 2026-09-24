@@ -1,6 +1,18 @@
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  Signal,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { debounceTime, distinctUntilChanged, from, map, of, switchMap } from 'rxjs';
 import {
   IonBackButton,
   IonButton,
@@ -11,12 +23,8 @@ import {
   IonInput,
   IonItem,
   IonLabel,
-  IonList,
-  IonNote,
-  IonSegment,
-  IonSegmentButton,
-  IonSelect,
-  IonSelectOption,
+  IonModal,
+  IonSearchbar,
   IonSpinner,
   IonTextarea,
   IonTitle,
@@ -27,11 +35,10 @@ import { addIcons } from 'ionicons';
 import {
   addOutline,
   batteryChargingOutline,
-  bicycleOutline,
-  busOutline,
   cameraOutline,
   carSportOutline,
   checkmarkOutline,
+  chevronExpandOutline,
   flashOutline,
   informationCircleOutline,
   leafOutline,
@@ -40,20 +47,50 @@ import {
 } from 'ionicons/icons';
 
 import { FuelType, VehicleType } from '../../core/models/vehicle.model';
-import { CatalogMake, CatalogService } from '../../core/services/catalog.service';
+import {
+  CatalogMake,
+  CatalogService,
+  FacetFilters,
+  FacetName,
+  Facets,
+  FacetValue,
+} from '../../core/services/catalog.service';
 import { PhotoService } from '../../core/services/photo.service';
 import { GarageStore } from '../../core/services/garage.store';
+import { BodyIconComponent } from '../../shared/body-icon.component';
+import { MakeLogoComponent } from '../../shared/make-logo.component';
 
 const COLORS = [
   '#e74c3c', '#4d9de0', '#2ec27e', '#f5a623',
   '#9b59b6', '#16a085', '#5d6d7e', '#e67e22',
 ];
 
-const TYPE_OPTIONS: { value: VehicleType; label: string; icon: string }[] = [
-  { value: 'car', label: 'Car', icon: 'car-sport-outline' },
-  { value: 'motorcycle', label: 'Motorbike', icon: 'bicycle-outline' },
-  { value: 'van', label: 'Van', icon: 'bus-outline' },
-];
+/** Para buscar sin distinguir mayúsculas ni tildes: "citro" encuentra Citroën. */
+function normalize(text: string): string {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+const TRANSMISSION_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  automatic: 'Automatic',
+  automated_manual: 'Automated manual',
+  dual_clutch: 'Dual clutch',
+  cvt: 'CVT',
+};
+
+/** Motores que se muestran como máximo, de los más comunes a los menos. */
+const MAX_ENGINES = 18;
+
+type Picker = 'make' | 'model';
+
+function label(value: string): string {
+  const text = value.replace(/_/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function values(list: FacetValue[] | undefined): string[] {
+  return (list ?? []).map((v) => v.value);
+}
 
 const FUEL_OPTIONS: { value: FuelType; label: string; icon: string }[] = [
   { value: 'gasoline', label: 'Petrol', icon: 'water-outline' },
@@ -62,6 +99,8 @@ const FUEL_OPTIONS: { value: FuelType; label: string; icon: string }[] = [
   { value: 'electric', label: 'Electric', icon: 'battery-charging-outline' },
 ];
 
+type FormValue = ReturnType<VehicleFormPage['form']['getRawValue']>;
+
 @Component({
   selector: 'app-vehicle-form',
   templateUrl: './vehicle-form.page.html',
@@ -69,9 +108,9 @@ const FUEL_OPTIONS: { value: FuelType; label: string; icon: string }[] = [
   imports: [
     ReactiveFormsModule,
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
-    IonInput, IonItem, IonLabel, IonList, IonNote, IonSegment,
-    IonSegmentButton, IonSelect, IonSelectOption, IonSpinner, IonTextarea,
-    IonTitle, IonToolbar,
+    IonInput, IonItem, IonLabel, IonModal, IonSearchbar,
+    IonSpinner, IonTextarea, IonTitle, IonToolbar,
+    BodyIconComponent, MakeLogoComponent,
   ],
 })
 export class VehicleFormPage implements OnInit {
@@ -84,7 +123,6 @@ export class VehicleFormPage implements OnInit {
   private readonly photos = inject(PhotoService);
 
   readonly colors = COLORS;
-  readonly typeOptions = TYPE_OPTIONS;
   readonly fuelOptions = FUEL_OPTIONS;
   readonly saving = signal(false);
   readonly processingPhoto = signal(false);
@@ -93,19 +131,26 @@ export class VehicleFormPage implements OnInit {
   readonly editingId = signal<string | null>(null);
   readonly submitted = signal(false);
 
-  readonly selectedType = signal<VehicleType>('car');
   readonly selectedMake = signal<string>('');
 
   readonly availableMakes = signal<CatalogMake[]>([]);
 
-  readonly availableModels = computed(() =>
-    this.catalog.modelsFor(this.availableMakes(), this.selectedMake())
-  );
+  readonly picker = signal<Picker | null>(null);
+  readonly pickerQuery = signal('');
+  /** El modelo no está en la lista y se escribe a mano. */
+  readonly customModel = signal(false);
 
-  readonly typeIcon = computed(
+  readonly filteredMakes = computed(() => {
+    const query = normalize(this.pickerQuery());
+    const makes = this.availableMakes();
+    return query ? makes.filter((m) => normalize(m.name).includes(query)) : makes;
+  });
+
+  readonly selectedMakeSlug = computed(
     () =>
-      TYPE_OPTIONS.find((o) => o.value === this.selectedType())?.icon ??
-      'car-sport-outline'
+      this.availableMakes().find(
+        (m) => m.name.toLowerCase() === this.selectedMake().trim().toLowerCase()
+      )?.slug
   );
 
   readonly form = this.fb.nonNullable.group({
@@ -118,6 +163,9 @@ export class VehicleFormPage implements OnInit {
       [Validators.required, Validators.min(1900), Validators.max(new Date().getFullYear() + 1)],
     ],
     fuel: ['gasoline' as FuelType, Validators.required],
+    body: [''],
+    transmission: [''],
+    engine: [''],
     plate: [''],
     mileage: [0, [Validators.required, Validators.min(0)]],
     monthlyMileage: [1000, [Validators.min(0), Validators.max(20000)]],
@@ -126,16 +174,71 @@ export class VehicleFormPage implements OnInit {
     notes: [''],
   });
 
+  private readonly value = toSignal(
+    this.form.valueChanges.pipe(map(() => this.form.getRawValue())),
+    { initialValue: this.form.getRawValue() }
+  );
+
+  // Cada paso pregunta a API Ninjas solo con lo elegido en los anteriores,
+  // así cada lista ofrece lo que existe para ese coche.
+  private readonly modelFacets = this.facetsFor(['model'], (v) =>
+    v.make ? { make: v.make } : null
+  );
+  private readonly bodyFacets = this.facetsFor(['body'], (v) =>
+    v.make && v.model ? { make: v.make, model: v.model, year: v.year } : null
+  );
+  private readonly fuelFacets = this.facetsFor(['fuel'], (v) =>
+    v.make && v.model
+      ? { make: v.make, model: v.model, year: v.year, body: v.body }
+      : null
+  );
+  private readonly specFacets = this.facetsFor(['transmission', 'badge'], (v) =>
+    v.make && v.model
+      ? { make: v.make, model: v.model, year: v.year, body: v.body, fuel: v.fuel }
+      : null
+  );
+
+  /** Modelos de API Ninjas, por popularidad; si no responde, los del catálogo. */
+  readonly models = computed(() => {
+    const remote = values(this.modelFacets().model);
+    return remote.length
+      ? remote
+      : this.catalog.modelsFor(this.availableMakes(), this.selectedMake());
+  });
+
+  readonly filteredModels = computed(() => {
+    const query = normalize(this.pickerQuery());
+    return query ? this.models().filter((m) => normalize(m).includes(query)) : this.models();
+  });
+
+  readonly bodies = computed(() => values(this.bodyFacets().body));
+
+  readonly availableFuels = computed(() => values(this.fuelFacets().fuel));
+
+  readonly transmissions = computed(() =>
+    values(this.specFacets().transmission).map((value) => ({
+      value,
+      label: TRANSMISSION_LABELS[value] ?? label(value),
+    }))
+  );
+
+  readonly engines = computed(() =>
+    values(this.specFacets().badge).slice(0, MAX_ENGINES)
+  );
+
   constructor() {
+    this.keepChoicesValid();
+
     addIcons({
-      addOutline, batteryChargingOutline, bicycleOutline, busOutline,
-      cameraOutline, carSportOutline, checkmarkOutline, flashOutline,
+      addOutline, batteryChargingOutline,
+      cameraOutline, carSportOutline, checkmarkOutline, chevronExpandOutline, flashOutline,
       informationCircleOutline, leafOutline, saveOutline, waterOutline,
     });
   }
 
   async ngOnInit(): Promise<void> {
-    await Promise.all([this.store.load(), this.loadMakes('car')]);
+    // De momento la app es solo para coches: el tipo queda fijo en 'car'.
+    await Promise.all([this.store.load(), this.loadMakes()]);
 
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
@@ -147,9 +250,7 @@ export class VehicleFormPage implements OnInit {
     }
 
     this.editingId.set(id);
-    this.selectedType.set(vehicle.type);
     this.selectedMake.set(vehicle.make);
-    if (vehicle.type !== 'car') await this.loadMakes(vehicle.type);
     this.form.patchValue({
       nickname: vehicle.nickname,
       type: vehicle.type,
@@ -157,6 +258,9 @@ export class VehicleFormPage implements OnInit {
       model: vehicle.model,
       year: vehicle.year,
       fuel: vehicle.fuel,
+      body: vehicle.body ?? '',
+      transmission: vehicle.transmission ?? '',
+      engine: vehicle.engine ?? '',
       plate: vehicle.plate ?? '',
       mileage: vehicle.mileage,
       monthlyMileage: vehicle.monthlyMileage ?? 1000,
@@ -166,20 +270,102 @@ export class VehicleFormPage implements OnInit {
     });
   }
 
-  async onTypeChange(type: VehicleType): Promise<void> {
-    this.selectedType.set(type);
-    this.form.patchValue({ type, make: '', model: '' });
-    this.selectedMake.set('');
-    await this.loadMakes(type);
+  private async loadMakes(): Promise<void> {
+    this.availableMakes.set(await this.catalog.makesFor('car'));
   }
 
-  private async loadMakes(type: VehicleType): Promise<void> {
-    this.availableMakes.set(await this.catalog.makesFor(type));
+  openPicker(picker: Picker): void {
+    this.pickerQuery.set('');
+    this.picker.set(picker);
   }
 
-  onMakeChange(make: string): void {
+  closePicker(): void {
+    const picker = this.picker();
+    if (!picker) return;
+    this.picker.set(null);
+    this.form.controls[picker].markAsTouched();
+  }
+
+  pickMake(make: string): void {
     this.selectedMake.set(make);
-    this.form.patchValue({ make, model: '' });
+    this.customModel.set(false);
+    this.form.patchValue({ make, model: '', body: '', transmission: '', engine: '' });
+    this.closePicker();
+  }
+
+  pickModel(model: string | null): void {
+    this.customModel.set(model === null);
+    this.form.patchValue({ model: model ?? '', body: '', transmission: '', engine: '' });
+    this.closePicker();
+  }
+
+  /** Pulsar la opción elegida la deselecciona. */
+  toggle(field: 'body' | 'transmission' | 'engine', value: string): void {
+    this.form.patchValue({ [field]: this.form.controls[field].value === value ? '' : value });
+  }
+
+  fuelAvailable(fuel: FuelType): boolean {
+    const available = this.availableFuels();
+    return !available.length || available.includes(fuel);
+  }
+
+  /**
+   * Cuando cambian las opciones, descarta lo que ya no existe para ese coche
+   * y elige solo la opción si no hay más.
+   */
+  private keepChoicesValid(): void {
+    effect(() => {
+      const bodies = this.bodies();
+      const current = this.value().body;
+      if (bodies.length === 1 && !current) this.form.patchValue({ body: bodies[0] });
+      else if (bodies.length && current && !bodies.includes(current)) {
+        this.form.patchValue({ body: '' });
+      }
+    });
+
+    effect(() => {
+      // Al editar se respeta lo guardado aunque la API diga otra cosa.
+      if (this.editingId()) return;
+      const fuels = this.availableFuels().filter((f) => FUEL_OPTIONS.some((o) => o.value === f));
+      if (fuels.length && !fuels.includes(this.value().fuel)) {
+        this.form.patchValue({ fuel: fuels[0] as FuelType });
+      }
+    });
+
+    effect(() => {
+      const transmissions = this.transmissions().map((t) => t.value);
+      const engines = values(this.specFacets().badge);
+      const { transmission, engine } = this.value();
+      if (transmissions.length && transmission && !transmissions.includes(transmission)) {
+        this.form.patchValue({ transmission: '' });
+      }
+      if (engines.length && engine && !engines.includes(engine)) {
+        this.form.patchValue({ engine: '' });
+      }
+    });
+  }
+
+  private facetsFor(
+    facets: FacetName[],
+    filters: (value: FormValue) => FacetFilters | null
+  ): Signal<Facets> {
+    const query = computed(() => {
+      const value = this.value();
+      const year = Number(value.year);
+      const result = filters({ ...value, year: year >= 1900 && year <= 2100 ? year : 0 });
+      return result ? JSON.stringify(result) : null;
+    });
+
+    return toSignal(
+      toObservable(query).pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((q) =>
+          q ? from(this.catalog.facets(JSON.parse(q), facets)) : of({})
+        )
+      ),
+      { initialValue: {} }
+    );
   }
 
   pickPhoto(): void {

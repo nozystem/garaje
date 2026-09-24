@@ -58,6 +58,12 @@
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
+.preview__logo {
+  --size: 100%;
+  border-radius: 0;
+  padding: 16px;
+}
+
 .preview__badge img {
   width: 100%;
   height: 100%;
@@ -166,6 +172,85 @@
   --min-height: 62px;
 }
 
+/* Campo de marca: imita a los ion-select de alrededor, pero con el logo. */
+.make-field__logo {
+  --size: 36px;
+  margin-inline-end: 14px;
+}
+
+.make-field__label {
+  margin-bottom: 2px;
+  font-size: 0.78rem;
+}
+
+.make-field h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.make-field__placeholder {
+  color: var(--ion-color-medium);
+}
+
+.make-field__chevron {
+  font-size: 18px;
+  color: var(--ion-color-medium);
+}
+
+/* --- Selector de marca ---------------------------------------------------- */
+
+.make-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  padding: 12px 16px 32px;
+}
+
+.make-tile {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 6px 10px;
+  border: 1.5px solid var(--ion-color-step-150);
+  border-radius: var(--app-radius-sm);
+  background: var(--ion-card-background);
+  color: var(--ion-text-color);
+  font-size: 0.76rem;
+  font-weight: 550;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.make-tile app-make-logo,
+.make-tile__other {
+  --size: 58px;
+  border-radius: 16px;
+}
+
+.make-tile__other {
+  display: grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  background: var(--ion-color-step-150);
+  color: var(--ion-color-medium);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.make-tile:active {
+  transform: scale(0.96);
+}
+
+.make-tile--active {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.12);
+  color: var(--ion-color-primary);
+}
+
 .divider {
   height: 1px;
   margin-left: 18px;
@@ -216,42 +301,95 @@
   font-size: 14px;
 }
 
-/* --- Selector de tipo ------------------------------------------------------ */
+/* --- Carrocería ------------------------------------------------------------ */
 
-.types {
+.bodies {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
+  gap: 8px;
 }
 
-.type {
+.body-option {
   display: grid;
-  place-items: center;
-  gap: 7px;
-  padding: 18px 8px 15px;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px 10px 10px;
   border: 1.5px solid var(--ion-color-step-150);
   border-radius: var(--app-radius-sm);
   background: var(--ion-card-background);
   color: var(--ion-color-medium);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 550;
   cursor: pointer;
   transition: border-color 0.18s ease, color 0.18s ease,
     background 0.18s ease, transform 0.18s ease;
 }
 
-.type ion-icon {
-  font-size: 27px;
+.body-option app-body-icon {
+  max-width: 70px;
 }
 
-.type:active {
+.body-option:active {
   transform: scale(0.96);
 }
 
-.type--active {
+.body-option--active {
   border-color: var(--ion-color-primary);
   background: rgba(var(--ion-color-primary-rgb), 0.12);
   color: var(--ion-color-primary);
+}
+
+/* --- Chips: cambio, motor y modelos ---------------------------------------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chips--picker {
+  padding: 4px 16px 32px;
+}
+
+.chip {
+  padding: 9px 14px;
+  border: 1.5px solid var(--ion-color-step-150);
+  border-radius: 999px;
+  background: var(--ion-card-background);
+  color: var(--ion-text-color);
+  font-size: 0.82rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+
+.chip--large {
+  padding: 12px 18px;
+  font-size: 0.92rem;
+}
+
+.chip--ghost {
+  border-style: dashed;
+  color: var(--ion-color-medium);
+}
+
+.chip--active {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.12);
+  color: var(--ion-color-primary);
+}
+
+.model-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.model-header app-make-logo {
+  --size: 44px;
 }
 
 /* --- Combustible ----------------------------------------------------------- */
@@ -279,6 +417,11 @@
 
 .fuel ion-icon {
   font-size: 21px;
+}
+
+/* Sin ese combustible según los datos: se puede elegir igual, pero apagado. */
+.fuel--unavailable {
+  opacity: 0.35;
 }
 
 .fuel--active {
@@ -327,7 +470,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .type,
+  .make-tile,
+  .body-option,
+  .chip,
   .fuel,
   .colors__dot,
   .preview__badge {

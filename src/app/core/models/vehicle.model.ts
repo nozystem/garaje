@@ -10,6 +10,9 @@ export interface Vehicle {
   year: number;
   type: VehicleType;
   fuel: FuelType;
+  body?: string;
+  transmission?: string;
+  engine?: string;
   plate?: string;
   mileage: number;
   mileageUpdatedAt: string;
@@ -28,6 +31,9 @@ export interface VehicleDraft {
   year: number;
   type: VehicleType;
   fuel: FuelType;
+  body?: string;
+  transmission?: string;
+  engine?: string;
   plate?: string;
   mileage: number;
   monthlyMileage?: number;

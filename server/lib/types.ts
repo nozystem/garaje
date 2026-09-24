@@ -22,6 +22,9 @@ export interface StoredVehicle {
   year: number;
   type: string;
   fuel: string;
+  body?: string;
+  transmission?: string;
+  engine?: string;
   plate?: string;
   mileage: number;
   mileageUpdatedAt: string;
