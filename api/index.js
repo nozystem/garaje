@@ -460,7 +460,8 @@ async function carFacets(query) {
 }
 
 // server/lib/car-illustration.ts
-var MODEL = "gemini-3.1-flash-image";
+var ACCURATE_MODEL = "@cf/black-forest-labs/flux-2-klein-9b";
+var CHEAP_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 var REQUEST_TIMEOUT_MS2 = 9e4;
 var COLOR_NAMES = {
   "#e74c3c": "bright red",
@@ -472,62 +473,68 @@ var COLOR_NAMES = {
   "#5d6d7e": "slate grey",
   "#e67e22": "orange"
 };
-function isConfigured2() {
-  return Boolean(process.env["GEMINI_API_KEY"]);
+function credentials() {
+  const account = process.env["CLOUDFLARE_ACCOUNT_ID"];
+  const token = process.env["CLOUDFLARE_AI_TOKEN"];
+  return account && token ? { account, token } : null;
 }
-function promptFor(q) {
+function isConfigured2() {
+  return credentials() !== null;
+}
+var FLAGGED = 3030;
+function promptFor(q, generic = false) {
   const color = (q.color && COLOR_NAMES[q.color.toLowerCase()]) ?? "silver";
-  const body = q.body ? ` ${q.body.toLowerCase()}` : "";
+  const body = q.body?.toLowerCase() ?? "car";
+  const subject = generic ? `Side view illustration of a modern ${q.year} ${body}, painted ${color}.` : `Side view illustration of a ${q.year} ${q.make} ${q.model} ${body}, painted ${color}. Accurate shape and details for that exact model and generation.`;
   return [
-    `A clean vector-style illustration of a ${q.year} ${q.make} ${q.model}${body},`,
-    `painted ${color}, seen exactly from the side (pure side profile), front facing left.`,
-    "Accurate proportions and details for that exact model and generation.",
-    "Crisp outlines, soft glossy shading, alloy wheels, tinted windows.",
-    "Plain white background, a thin soft shadow under the wheels,",
-    "no text, no logos, no watermark, no people, the whole car in frame."
+    subject,
+    "Pure 90-degree side profile, the whole car visible, front of the car pointing left.",
+    "Clean vector art style, crisp outlines, glossy shading, alloy wheels, tinted windows.",
+    "Plain white background, thin soft shadow under the wheels.",
+    "No text, no logos, no watermark."
   ].join(" ");
 }
-function findImage(node) {
-  if (!node || typeof node !== "object") return null;
-  const record = node;
-  const data = record["data"];
-  const mimeType = record["mime_type"] ?? record["mimeType"];
-  if (typeof data === "string" && typeof mimeType === "string" && mimeType.startsWith("image/")) {
-    return { data, mimeType };
-  }
-  for (const value of Object.values(record)) {
-    const found = findImage(value);
-    if (found) return found;
+async function generateIllustration(q) {
+  const attempts = [
+    [ACCURATE_MODEL, false],
+    [CHEAP_MODEL, false],
+    [CHEAP_MODEL, true]
+  ];
+  for (const [model, generic] of attempts) {
+    const result = await draw(model, promptFor(q, generic));
+    if (result === "flagged") continue;
+    if (result) return result;
+    if (model === CHEAP_MODEL) return null;
   }
   return null;
 }
-async function generateIllustration(q) {
-  const apiKey = process.env["GEMINI_API_KEY"];
-  if (!apiKey) return null;
+async function draw(model, prompt) {
+  const auth = credentials();
+  if (!auth) return null;
+  const form = new FormData();
+  form.set("prompt", prompt);
+  form.set("width", "1024");
+  form.set("height", "576");
   try {
-    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-      method: "POST",
-      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        input: [{ type: "text", text: promptFor(q) }],
-        response_format: {
-          type: "image",
-          mime_type: "image/jpeg",
-          aspect_ratio: "16:9",
-          image_size: "1K"
-        }
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
-    });
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${auth.account}/ai/run/${model}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${auth.token}` },
+        body: form,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
+      }
+    );
+    const body = await res.json();
     if (!res.ok) {
-      console.error(`Gemini answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      if (body.errors?.some((e) => e.code === FLAGGED)) return "flagged";
+      console.error(`Workers AI answered ${res.status}: ${body.errors?.[0]?.message ?? ""}`);
       return null;
     }
-    const image = findImage(await res.json());
-    return image ? `data:${image.mimeType};base64,${image.data}` : null;
+    const image = body.result?.image;
+    return typeof image === "string" ? `data:image/jpeg;base64,${image}` : null;
   } catch (error) {
-    console.error("Gemini illustration failed:", error);
+    console.error("Workers AI illustration failed:", error);
     return null;
   }
 }

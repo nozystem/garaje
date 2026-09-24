@@ -98,12 +98,14 @@ POSTGRES_URL=postgres://user@127.0.0.1:5432/garage
 AUTH_SECRET=anything-longer-than-32-characters-for-local
 CAR_IMAGES_API_KEY=your-key-from-carimagesapi.com
 API_NINJAS_KEY=your-key-from-api-ninjas.com
-GEMINI_API_KEY=your-key-from-aistudio.google.com
+CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
+CLOUDFLARE_AI_TOKEN=a-token-with-workers-ai-permission
 ```
 
-`GEMINI_API_KEY` draws a side-view illustration of each car with
-`gemini-3.1-flash-image`. It is generated once, stored with the vehicle and
-dropped when the make, model, year, body or colour change.
+The Cloudflare pair draws a side-view illustration of each car with Workers
+AI (FLUX.2 klein), within the free daily allowance. It is generated
+once, stored with the vehicle and dropped when the make, model, year, body or
+colour change.
 
 `API_NINJAS_KEY` feeds the guided form (models, body, gearbox and engine per
 car) from the free `/v2/carfacets` endpoint. Without it the form falls back to
