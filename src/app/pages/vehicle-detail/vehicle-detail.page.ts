@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -284,15 +285,47 @@ export class VehicleDetailPage implements OnInit {
   }
 
   /**
-   * Etiqueta en PDF de la visita a la que pertenece el registro: todo lo
-   * hecho ese día, con el próximo mantenimiento de esas tareas.
+   * Etiqueta en PDF de un mantenimiento. Si ese día hay más registros, el
+   * usuario elige cuáles van en ella (por defecto, solo el que ha pulsado):
+   * no todo lo registrado un mismo día es de la misma visita.
    */
   async downloadLabel(record: MaintenanceRecord): Promise<void> {
+    const day = record.date.slice(0, 10);
+    const sameDay = this.records().filter((r) => r.date.slice(0, 10) === day);
+    if (sameDay.length === 1) return this.createLabel(sameDay);
+
+    const alert = await this.alerts.create({
+      header: this.i18n.t('detail.labelPick'),
+      message: this.i18n.t('detail.labelPickText', {
+        date: formatDate(record.date, 'd MMM y', this.i18n.locale()),
+      }),
+      inputs: sameDay.map((r) => ({
+        type: 'checkbox' as const,
+        label: r.title,
+        value: r.id,
+        checked: r.id === record.id,
+      })),
+      buttons: [
+        { text: this.i18n.t('common.cancel'), role: 'cancel' },
+        {
+          text: this.i18n.t('detail.labelCreate'),
+          handler: (ids: string[]) => {
+            const chosen = sameDay.filter((r) => ids.includes(r.id));
+            if (!chosen.length) return false;
+            void this.createLabel(chosen);
+            return true;
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  /** Genera la etiqueta con esos registros y el próximo mantenimiento de sus tareas. */
+  private async createLabel(records: MaintenanceRecord[]): Promise<void> {
     const vehicle = this.vehicle();
     if (!vehicle) return;
 
-    const day = record.date.slice(0, 10);
-    const records = this.records().filter((r) => r.date.slice(0, 10) === day);
     const plans = new Set(records.map((r) => r.planId).filter(Boolean));
     const statuses = this.plans().filter((s) => plans.has(s.plan.id));
 

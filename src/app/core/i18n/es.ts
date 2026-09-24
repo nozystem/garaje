@@ -189,6 +189,9 @@ export const es: Record<TranslationKey, string> = {
   'detail.plansAdded': '{n} tareas añadidas',
   'detail.label': 'Descargar la etiqueta del mantenimiento (PDF)',
   'detail.labelFailed': 'No se ha podido crear la etiqueta',
+  'detail.labelPick': '¿Qué va en la etiqueta?',
+  'detail.labelPickText': 'Trabajos registrados el {date}.',
+  'detail.labelCreate': 'Crear etiqueta',
 
   // body
   'body.sedan': 'Berlina',

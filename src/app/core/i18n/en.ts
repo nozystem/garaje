@@ -190,6 +190,9 @@ export const en = {
   'detail.plansAdded': '{n} tasks added',
   'detail.label': 'Download the service label (PDF)',
   'detail.labelFailed': 'The label could not be created',
+  'detail.labelPick': 'What goes on the label?',
+  'detail.labelPickText': 'Jobs logged on {date}.',
+  'detail.labelCreate': 'Create label',
 
   // body
   'body.sedan': 'Sedan',

@@ -4,7 +4,7 @@ import type { Vehicle } from '../core/models/vehicle.model';
 
 export interface ServiceLabel {
   vehicle: Vehicle;
-  /** Lo hecho en esa visita: todos los registros del mismo día. */
+  /** Los trabajos que el usuario ha elegido para la etiqueta, del mismo día. */
   records: MaintenanceRecord[];
   /** El próximo mantenimiento de esas tareas, si se conoce. */
   nextKm?: number;
