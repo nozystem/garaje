@@ -89,6 +89,7 @@ export class GarageStore {
       this._records.set(snapshot.records);
       this._plans.set(snapshot.plans);
       this._loaded.set(true);
+      snapshot.vehicles.forEach((vehicle) => this.illustrateIfMissing(vehicle));
     } catch (error) {
       this._error.set((error as Error).message);
     } finally {

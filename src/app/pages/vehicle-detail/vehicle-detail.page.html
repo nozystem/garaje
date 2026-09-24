@@ -32,8 +32,6 @@
             </div>
           } @else if (v.illustration) {
             <img class="hero__art" [src]="v.illustration" [alt]="v.make + ' ' + v.model" />
-          } @else if (v.stockImage) {
-            <img class="hero__stock" [src]="v.stockImage" [alt]="v.make + ' ' + v.model" />
           } @else {
             <div class="hero__badge">
               <ion-icon [name]="typeIcon" aria-hidden="true"></ion-icon>

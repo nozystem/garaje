@@ -26,7 +26,6 @@ import {
   isConfigured as isIllustrationConfigured,
 } from './car-illustration.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
-import { stockImageUrl } from './vehicle-image.ts';
 import {
   deleteUser,
   findById,
@@ -147,7 +146,6 @@ export async function handleRequest(
       if (method !== 'GET') return methodNotAllowed(res, ['GET']);
 
       const snapshot = await loadSnapshot(userId);
-      await backfillStockImages(userId, snapshot.vehicles);
       json(res, 200, snapshot);
       return;
     }
@@ -192,7 +190,6 @@ async function handleVehicles(
       ...parsed.value,
       id: newId(),
       userId,
-      stockImage: (await stockImageUrl(parsed.value)) ?? undefined,
       mileageUpdatedAt: now,
       createdAt: now,
     };
@@ -250,9 +247,6 @@ async function handleVehicles(
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? undefined : existing.illustration,
-      stockImage: identityChanged
-        ? ((await stockImageUrl(parsed.value)) ?? undefined)
-        : existing.stockImage,
       mileageUpdatedAt:
         parsed.value.mileage !== existing.mileage
           ? new Date().toISOString()
@@ -379,22 +373,4 @@ async function handlePlans(
   }
 
   methodNotAllowed(res, ['PUT', 'DELETE']);
-}
-
-async function backfillStockImages(
-  userId: string,
-  vehicles: StoredVehicle[]
-): Promise<void> {
-  const pending = vehicles.filter((v) => !v.stockImage);
-  if (!pending.length) return;
-
-  await Promise.all(
-    pending.map(async (vehicle) => {
-      const url = await stockImageUrl(vehicle);
-      if (!url) return;
-
-      vehicle.stockImage = url;
-      await upsert('vehicles', userId, vehicle.id, vehicle);
-    })
-  );
 }

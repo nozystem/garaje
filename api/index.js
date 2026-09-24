@@ -622,52 +622,6 @@ function makesForType(type) {
   })).filter((make) => make.models.length > 0);
 }
 
-// server/lib/vehicle-image.ts
-var cache3 = /* @__PURE__ */ new Map();
-var CACHE_TTL_MS2 = 6 * 60 * 60 * 1e3;
-var MISS_TTL_MS2 = 24 * 60 * 60 * 1e3;
-var REQUEST_TIMEOUT_MS3 = 6e3;
-function keyOf(q) {
-  return `${q.type}|${q.make}|${q.model}|${q.year}`.toLowerCase();
-}
-async function stockImageUrl(q) {
-  const apiKey = process.env["CAR_IMAGES_API_KEY"];
-  if (!apiKey) return null;
-  const key = keyOf(q);
-  const hit = cache3.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.url;
-  const params = new URLSearchParams({
-    api_key: apiKey,
-    make: q.make,
-    model: q.model,
-    year: String(q.year),
-    type: q.type === "motorcycle" ? "moto" : "car"
-  });
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS3);
-    const res = await fetch(
-      `https://carimagesapi.com/api/v1/signed-url?${params}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timer);
-    if (!res.ok) {
-      cache3.set(key, { url: null, expiresAt: Date.now() + MISS_TTL_MS2 });
-      return null;
-    }
-    const body = await res.json();
-    const url = typeof body.url === "string" ? body.url : null;
-    cache3.set(key, {
-      url,
-      expiresAt: Date.now() + (url ? CACHE_TTL_MS2 : MISS_TTL_MS2)
-    });
-    return url;
-  } catch {
-    cache3.set(key, { url: null, expiresAt: Date.now() + MISS_TTL_MS2 });
-    return null;
-  }
-}
-
 // server/lib/validate.ts
 var VEHICLE_TYPES = ["car", "motorcycle", "van"];
 var FUEL_TYPES = ["gasoline", "diesel", "electric", "hybrid"];
@@ -907,7 +861,6 @@ async function handleRequest(req, res) {
     case "garage": {
       if (method !== "GET") return methodNotAllowed(res, ["GET"]);
       const snapshot = await loadSnapshot(userId);
-      await backfillStockImages(userId, snapshot.vehicles);
       json(res, 200, snapshot);
       return;
     }
@@ -937,7 +890,6 @@ async function handleVehicles(res, method, userId, id, action, body) {
       ...parsed.value,
       id: newId(),
       userId,
-      stockImage: await stockImageUrl(parsed.value) ?? void 0,
       mileageUpdatedAt: now,
       createdAt: now
     };
@@ -977,7 +929,6 @@ async function handleVehicles(res, method, userId, id, action, body) {
       ...existing,
       ...parsed.value,
       illustration: looksChanged ? void 0 : existing.illustration,
-      stockImage: identityChanged ? await stockImageUrl(parsed.value) ?? void 0 : existing.stockImage,
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
     await upsert("vehicles", userId, id, updated);
@@ -1066,18 +1017,6 @@ async function handlePlans(res, method, userId, id, body) {
     return;
   }
   methodNotAllowed(res, ["PUT", "DELETE"]);
-}
-async function backfillStockImages(userId, vehicles) {
-  const pending = vehicles.filter((v) => !v.stockImage);
-  if (!pending.length) return;
-  await Promise.all(
-    pending.map(async (vehicle) => {
-      const url = await stockImageUrl(vehicle);
-      if (!url) return;
-      vehicle.stockImage = url;
-      await upsert("vehicles", userId, vehicle.id, vehicle);
-    })
-  );
 }
 
 // server/entry/vercel.ts

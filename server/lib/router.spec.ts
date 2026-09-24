@@ -503,8 +503,8 @@ describe('errors', () => {
   });
 });
 
-describe('stock vehicle image', () => {
-  it('stores no image when the service is not configured', async () => {
+describe('vehicle illustration', () => {
+  it('creates the vehicle without an illustration', async () => {
     const c = client();
     await c.register();
 
@@ -512,23 +512,21 @@ describe('stock vehicle image', () => {
       await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
     ).json();
 
-    expect(car.stockImage).toBeUndefined();
+    expect(car.illustration).toBeUndefined();
   });
 
-  it('keeps the stored image when only the mileage changes', async () => {
+  it('answers 503 when the image service is not configured', async () => {
     const c = client();
     await c.register();
     const car = await (
       await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) })
     ).json();
 
-    const updated = await (
-      await c.fetch(`/api/vehicles/${car.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...CAR, mileage: 150_000 }),
-      })
-    ).json();
+    const res = await c.fetch(`/api/vehicles/${car.id}/illustration`, {
+      method: 'POST',
+      body: '{}',
+    });
 
-    expect(updated.stockImage).toBe(car.stockImage);
+    expect(res.status).toBe(503);
   });
 });

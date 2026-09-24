@@ -19,7 +19,6 @@ export interface Vehicle {
   monthlyMileage?: number;
   color?: string;
   photo?: string;
-  stockImage?: string;
   illustration?: string;
   notes?: string;
   createdAt: string;

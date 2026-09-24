@@ -96,7 +96,6 @@ npm start          # app on :4200, proxying /api
 ```
 POSTGRES_URL=postgres://user@127.0.0.1:5432/garage
 AUTH_SECRET=anything-longer-than-32-characters-for-local
-CAR_IMAGES_API_KEY=your-key-from-carimagesapi.com
 API_NINJAS_KEY=your-key-from-api-ninjas.com
 CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
 CLOUDFLARE_AI_TOKEN=a-token-with-workers-ai-permission
