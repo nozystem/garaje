@@ -1,0 +1,227 @@
+.group {
+  margin: 26px 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.message {
+  display: grid;
+  place-items: center;
+  padding: 60px 0;
+  color: var(--ion-color-medium);
+}
+
+.note {
+  margin: 8px 4px 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ion-color-medium);
+}
+
+.card {
+  border-radius: var(--app-radius);
+  background: var(--ion-card-background);
+}
+
+/* --- Indicadores ----------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.tile {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--app-radius-sm);
+  background: var(--ion-card-background);
+}
+
+.tile__value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__label {
+  font-size: 0.74rem;
+  color: var(--ion-color-medium);
+}
+
+/* --- Gráfico diario -------------------------------------------------------- */
+
+.chart {
+  margin-top: 8px;
+  padding: 14px 16px 10px;
+}
+
+.chart__title {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ion-color-medium);
+}
+
+.bars {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 2px;
+  height: 130px;
+}
+
+.bar {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: end;
+  justify-items: center;
+  /* Zona de hover más grande que la barra, para acertar con el dedo. */
+  cursor: default;
+}
+
+.bar__fill {
+  width: min(70%, 18px);
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--ion-color-primary);
+}
+
+/* Días sin imágenes: una raya fina sobre la base, no un hueco. */
+.bar__fill--empty {
+  background: var(--ion-color-step-250);
+}
+
+.bar__label {
+  margin-top: 6px;
+  font-size: 0.66rem;
+  color: var(--ion-color-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar__tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 1;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--ion-color-step-100);
+  color: var(--ion-text-color);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.bar:first-child .bar__tip {
+  left: 0;
+  transform: none;
+}
+
+.bar:last-child .bar__tip {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.bar:hover .bar__tip {
+  opacity: 1;
+}
+
+/* --- Marcas ---------------------------------------------------------------- */
+
+.makes {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 14px 16px;
+}
+
+.make {
+  display: grid;
+  grid-template-columns: 110px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.make__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.make__track {
+  height: 10px;
+}
+
+.make__fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ion-color-primary);
+}
+
+.make__count {
+  text-align: right;
+  color: var(--ion-color-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Personas -------------------------------------------------------------- */
+
+.table-wrap {
+  margin-bottom: 32px;
+  overflow-x: auto;
+}
+
+.people {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.people th,
+.people td {
+  padding: 10px 14px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ion-color-step-150);
+}
+
+.people th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.people tr:last-child td {
+  border-bottom: none;
+}
+
+.people .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.people__name {
+  display: block;
+  font-weight: 600;
+}
+
+.people__email {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--ion-color-medium);
+}

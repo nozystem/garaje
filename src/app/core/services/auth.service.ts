@@ -7,6 +7,7 @@ export interface User {
   email: string;
   name: string;
   createdAt: string;
+  isAdmin?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -19,6 +20,8 @@ export class AuthService {
   readonly user = this._user.asReadonly();
   readonly checked = this._checked.asReadonly();
   readonly isLoggedIn = computed(() => this._user() !== null);
+  /** Solo decide qué se enseña: el servidor vuelve a comprobarlo en cada petición. */
+  readonly isAdmin = computed(() => this._user()?.isAdmin === true);
 
   async restore(): Promise<void> {
     if (this._checked()) return;

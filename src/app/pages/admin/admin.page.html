@@ -1,0 +1,165 @@
+<ion-header [translucent]="true" class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button text="Back" defaultHref="/settings"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Admin</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="load()" [disabled]="loading()" aria-label="Refresh">
+        <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding-horizontal">
+  @if (error()) {
+    <p class="message">{{ error() }}</p>
+  } @else if (!stats()) {
+    <div class="message"><ion-spinner name="crescent"></ion-spinner></div>
+  } @else {
+    @let s = stats()!;
+
+    <h3 class="group">Illustrations · Gemini</h3>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__value">{{ gemini().today }}</span>
+        <span class="tile__label">Today</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ gemini().week }}</span>
+        <span class="tile__label">7 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ gemini().month }}</span>
+        <span class="tile__label">30 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ gemini().costMonth | number: '1.2-2' }} $</span>
+        <span class="tile__label">Spent · 30 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ gemini().costTotal | number: '1.2-2' }} $</span>
+        <span class="tile__label">Spent · all time</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ cache().total }}</span>
+        <span class="tile__label">Reused · saved {{ cache().savedTotal | number: '1.2-2' }} $</span>
+      </div>
+    </div>
+    @if (gemini().errorsMonth) {
+      <p class="note">{{ gemini().errorsMonth }} failed generations in the last 30 days (not charged).</p>
+    }
+
+    <div class="card chart">
+      <p class="chart__title">Images generated per day · last 14 days</p>
+      <div class="bars" role="list">
+        @for (day of days(); track day.day) {
+          <div
+            class="bar"
+            role="listitem"
+            [attr.aria-label]="day.day + ': ' + day.gemini + ' images, ' + day.cacheHits + ' reused'"
+          >
+            <span class="bar__tip">
+              {{ day.day | date: 'd MMM' }} · {{ day.gemini }} new · {{ day.cacheHits }} reused
+            </span>
+            <span class="bar__fill" [style.height.%]="day.height" [class.bar__fill--empty]="!day.gemini"></span>
+            <span class="bar__label">{{ day.day | date: 'd' }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <h3 class="group">API Ninjas · car data</h3>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__value">{{ ninjas().today }}</span>
+        <span class="tile__label">Calls today</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ ninjas().week }}</span>
+        <span class="tile__label">7 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ ninjas().month }}</span>
+        <span class="tile__label">30 days</span>
+      </div>
+    </div>
+    <p class="note">
+      Only real calls count; answers served from the server's one-day cache do not.
+      @if (ninjas().errorsMonth) {
+        {{ ninjas().errorsMonth }} failed in the last 30 days.
+      }
+    </p>
+
+    <h3 class="group">Users & garage</h3>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__value">{{ s.users.total }}</span>
+        <span class="tile__label">Users</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ s.users.week }}</span>
+        <span class="tile__label">New · 7 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ s.users.month }}</span>
+        <span class="tile__label">New · 30 days</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ s.vehicles }}</span>
+        <span class="tile__label">Vehicles</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ s.storedIllustrations }}</span>
+        <span class="tile__label">Stored illustrations</span>
+      </div>
+    </div>
+
+    @if (makes().length) {
+      <div class="card makes">
+        <p class="chart__title">Most common makes</p>
+        @for (make of makes(); track make.make) {
+          <div class="make">
+            <span class="make__name">{{ make.make }}</span>
+            <span class="make__track">
+              <span class="make__fill" [style.width.%]="make.width"></span>
+            </span>
+            <span class="make__count">{{ make.count }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <h3 class="group">People</h3>
+    <div class="card table-wrap">
+      <table class="people">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Joined</th>
+            <th class="num">Cars</th>
+            <th class="num">Images</th>
+            <th class="num">Spent</th>
+            <th>Last API use</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (person of s.people; track person.id) {
+            <tr>
+              <td>
+                <span class="people__name">{{ person.name }}</span>
+                <span class="people__email">{{ person.email }}</span>
+              </td>
+              <td>{{ person.createdAt | date: 'd MMM y' }}</td>
+              <td class="num">{{ person.vehicles }}</td>
+              <td class="num">{{ person.images }}</td>
+              <td class="num">{{ person.costUsd | number: '1.2-2' }} $</td>
+              <td>{{ person.lastActivity ? (person.lastActivity | date: 'd MMM, HH:mm') : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</ion-content>

@@ -37,6 +37,19 @@
     </div>
   </div>
 
+  @if (auth.isAdmin()) {
+    <h3 class="group">Admin</h3>
+    <div class="card">
+      <ion-item button lines="none" [detail]="true" (click)="openAdmin()">
+        <ion-icon slot="start" name="stats-chart-outline" color="primary"></ion-icon>
+        <ion-label>
+          <h3>Admin panel</h3>
+          <p>Users, API usage and spending</p>
+        </ion-label>
+      </ion-item>
+    </div>
+  }
+
   <h3 class="group">Account</h3>
   <div class="card">
     <ion-item button lines="full" (click)="exportData()">

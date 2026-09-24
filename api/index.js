@@ -197,6 +197,18 @@ async function ensureSchema(p) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Una fila por llamada a un servicio externo, para el panel de admin.
+    -- Sobrevive al borrado del usuario para que las cifras de gasto cuadren.
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id BIGSERIAL PRIMARY KEY,
+      at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      user_id TEXT REFERENCES users (id) ON DELETE SET NULL,
+      service TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      cost_usd NUMERIC(10, 5) NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
@@ -214,6 +226,90 @@ async function saveIllustration(key, image) {
      ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, created_at = now()`,
     [key, image]
   );
+}
+async function recordUsage(event) {
+  try {
+    const p = await getPool();
+    await p.query(
+      `INSERT INTO usage_events (user_id, service, outcome, cost_usd) VALUES ($1, $2, $3, $4)`,
+      [event.userId, event.service, event.outcome, event.costUsd ?? 0]
+    );
+  } catch (error) {
+    console.error("Could not record usage:", error);
+  }
+}
+async function adminStats() {
+  const p = await getPool();
+  const [users, vehicles, illustrations, usage, daily, makes, people] = await Promise.all([
+    p.query(`
+      SELECT count(*)::int AS total,
+             count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS week,
+             count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS month
+      FROM users`),
+    p.query("SELECT count(*)::int AS n FROM vehicles"),
+    p.query("SELECT count(*)::int AS n FROM illustrations"),
+    p.query(`
+      SELECT service, outcome,
+             count(*) FILTER (WHERE at >= date_trunc('day', now()))::int AS today,
+             count(*) FILTER (WHERE at > now() - interval '7 days')::int AS week,
+             count(*) FILTER (WHERE at > now() - interval '30 days')::int AS month,
+             count(*)::int AS total,
+             coalesce(sum(cost_usd) FILTER (WHERE at > now() - interval '30 days'), 0)::float AS cost_month,
+             coalesce(sum(cost_usd), 0)::float AS cost_total
+      FROM usage_events GROUP BY service, outcome`),
+    p.query(`
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+             count(e.id) FILTER (WHERE e.service = 'gemini' AND e.outcome = 'ok')::int AS gemini,
+             count(e.id) FILTER (WHERE e.service = 'illustration-cache')::int AS cache_hits,
+             count(e.id) FILTER (WHERE e.service = 'api-ninjas')::int AS api_ninjas
+      FROM generate_series(date_trunc('day', now()) - interval '13 days',
+                           date_trunc('day', now()), interval '1 day') AS d(day)
+      LEFT JOIN usage_events e ON date_trunc('day', e.at) = d.day
+      GROUP BY d.day ORDER BY d.day`),
+    p.query(`
+      SELECT data->>'make' AS make, count(*)::int AS count
+      FROM vehicles GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 8`),
+    p.query(`
+      SELECT u.id, u.email, u.name, u.created_at,
+             (SELECT count(*) FROM vehicles v WHERE v.user_id = u.id)::int AS vehicles,
+             count(e.id) FILTER (WHERE e.service = 'gemini' AND e.outcome = 'ok')::int AS images,
+             coalesce(sum(e.cost_usd), 0)::float AS cost_usd,
+             max(e.at) AS last_activity
+      FROM users u LEFT JOIN usage_events e ON e.user_id = u.id
+      GROUP BY u.id ORDER BY u.created_at DESC`)
+  ]);
+  return {
+    users: users.rows[0],
+    vehicles: vehicles.rows[0]["n"],
+    storedIllustrations: illustrations.rows[0]["n"],
+    usage: usage.rows.map((r) => ({
+      service: r["service"],
+      outcome: r["outcome"],
+      today: r["today"],
+      week: r["week"],
+      month: r["month"],
+      total: r["total"],
+      costMonth: r["cost_month"],
+      costTotal: r["cost_total"]
+    })),
+    daily: daily.rows.map((r) => ({
+      day: r["day"],
+      gemini: r["gemini"],
+      cacheHits: r["cache_hits"],
+      apiNinjas: r["api_ninjas"]
+    })),
+    topMakes: makes.rows,
+    people: people.rows.map((r) => ({
+      id: r["id"],
+      email: r["email"],
+      name: r["name"],
+      createdAt: r["created_at"].toISOString(),
+      vehicles: r["vehicles"],
+      images: r["images"],
+      costUsd: r["cost_usd"],
+      lastActivity: r["last_activity"] ? r["last_activity"].toISOString() : null
+    }))
+  };
 }
 async function createUser(user) {
   const p = await getPool();
@@ -327,12 +423,17 @@ function userIdFrom(req) {
   const token = tokenFrom(req);
   return token ? verifyToken(token) : null;
 }
+function isAdmin(email) {
+  const admins = (process.env["ADMIN_EMAILS"] ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return admins.includes(email.trim().toLowerCase());
+}
 function toPublic(user) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    createdAt: user.createdAt
+    createdAt: user.createdAt,
+    isAdmin: isAdmin(user.email)
   };
 }
 var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -447,15 +548,15 @@ function buildQuery(input) {
   }
   return query;
 }
-async function generationsFor(make, model) {
+async function generationsFor(make, model, track) {
   const base = buildQuery(new URLSearchParams({ make, model, facets: "generation" }));
   if (!base) return null;
-  const list = await carFacets(base);
+  const list = await carFacets(base, track);
   if (!list) return null;
   const starts = await Promise.all(
     (list.generation ?? []).map(async ({ value }) => {
       const query = buildQuery(new URLSearchParams({ make, model, generation: value, facets: "year" }));
-      const years = query ? (await carFacets(query))?.year : void 0;
+      const years = query ? (await carFacets(query, track))?.year : void 0;
       const launch = [...years ?? []].sort((a, b) => b.count - a.count)[0];
       const from = Number(launch?.value);
       return Number.isFinite(from) ? { value, from } : null;
@@ -464,7 +565,7 @@ async function generationsFor(make, model) {
   const sorted = starts.filter((g) => g !== null).sort((a, b) => a.from - b.from);
   return sorted.map((g, i) => ({ ...g, to: sorted[i + 1]?.from ?? null }));
 }
-async function carFacets(query) {
+async function carFacets(query, track) {
   const apiKey = process.env["API_NINJAS_KEY"];
   if (!apiKey) return null;
   const key = query.toString();
@@ -475,6 +576,7 @@ async function carFacets(query) {
       headers: { "X-Api-Key": apiKey },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
+    track?.(res.ok);
     if (!res.ok) throw new Error(`API Ninjas answered ${res.status}`);
     const body = await res.json();
     const facets = {};
@@ -494,6 +596,7 @@ async function carFacets(query) {
 // server/lib/car-illustration.ts
 var MODEL = "gemini-3.1-flash-lite-image";
 var REQUEST_TIMEOUT_MS2 = 9e4;
+var COST_PER_IMAGE_USD = 0.0336;
 var COLOR_NAMES = {
   "#e74c3c": "bright red",
   "#4d9de0": "sky blue",
@@ -877,6 +980,18 @@ async function handleRequest(req, res) {
     unauthorized(res);
     return;
   }
+  if (path === "/api/admin/stats") {
+    if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+    const user = await findUserById(userId);
+    if (!user || !isAdmin(user.email)) {
+      json(res, 403, { error: "Admins only" });
+      return;
+    }
+    json(res, 200, await adminStats());
+    return;
+  }
+  const pendingUsage = [];
+  const trackNinjas = (ok) => pendingUsage.push(recordUsage({ userId, service: "api-ninjas", outcome: ok ? "ok" : "error" }));
   if (path === "/api/catalog/generations") {
     if (method !== "GET") return methodNotAllowed(res, ["GET"]);
     if (!isConfigured()) {
@@ -886,7 +1001,8 @@ async function handleRequest(req, res) {
     const make = url.searchParams.get("make") ?? "";
     const model = url.searchParams.get("model") ?? "";
     if (!make.trim() || !model.trim()) return badRequest(res, ["Make and model are required"]);
-    const generations = await generationsFor(make, model);
+    const generations = await generationsFor(make, model, trackNinjas);
+    await Promise.all(pendingUsage);
     if (!generations) {
       json(res, 502, { error: "Car data is not available right now" });
       return;
@@ -903,7 +1019,8 @@ async function handleRequest(req, res) {
     }
     const query = buildQuery(url.searchParams);
     if (!query) return badRequest(res, ["Invalid facet query"]);
-    const facets = await carFacets(query);
+    const facets = await carFacets(query, trackNinjas);
+    await Promise.all(pendingUsage);
     if (!facets) {
       json(res, 502, { error: "Car data is not available right now" });
       return;
@@ -973,12 +1090,20 @@ async function handleVehicles(res, method, userId, id, action, body) {
     const fresh = body?.fresh === true;
     const key = illustrationKey(existing);
     let illustration = fresh ? null : await findIllustration(key);
-    if (!illustration) {
+    if (illustration) {
+      await recordUsage({ userId, service: "illustration-cache", outcome: "ok" });
+    } else {
       if (!isConfigured2()) {
         json(res, 503, { error: "Illustrations are not configured" });
         return;
       }
       illustration = await generateIllustration(existing);
+      await recordUsage({
+        userId,
+        service: "gemini",
+        outcome: illustration ? "ok" : "error",
+        costUsd: illustration ? COST_PER_IMAGE_USD : 0
+      });
       if (!illustration) {
         json(res, 502, { error: "The illustration could not be created" });
         return;

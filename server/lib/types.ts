@@ -11,6 +11,7 @@ export interface PublicUser {
   email: string;
   name: string;
   createdAt: string;
+  isAdmin: boolean;
 }
 
 export interface StoredVehicle {

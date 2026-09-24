@@ -87,6 +87,18 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Una fila por llamada a un servicio externo, para el panel de admin.
+    -- Sobrevive al borrado del usuario para que las cifras de gasto cuadren.
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id BIGSERIAL PRIMARY KEY,
+      at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      user_id TEXT REFERENCES users (id) ON DELETE SET NULL,
+      service TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      cost_usd NUMERIC(10, 5) NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
@@ -109,6 +121,141 @@ export async function saveIllustration(key: string, image: string): Promise<void
      ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, created_at = now()`,
     [key, image]
   );
+}
+
+/* --- Uso de servicios externos -------------------------------------------- */
+
+export type UsageService = 'gemini' | 'illustration-cache' | 'api-ninjas';
+export type UsageOutcome = 'ok' | 'error';
+
+export interface UsageEvent {
+  userId: string | null;
+  service: UsageService;
+  outcome: UsageOutcome;
+  costUsd?: number;
+}
+
+/**
+ * Apunta una llamada para el panel de admin. Nunca rompe la petición que la
+ * origina: si falla el registro, se pierde esa fila y nada más.
+ */
+export async function recordUsage(event: UsageEvent): Promise<void> {
+  try {
+    const p = await getPool();
+    await p.query(
+      `INSERT INTO usage_events (user_id, service, outcome, cost_usd) VALUES ($1, $2, $3, $4)`,
+      [event.userId, event.service, event.outcome, event.costUsd ?? 0]
+    );
+  } catch (error) {
+    console.error('Could not record usage:', error);
+  }
+}
+
+export interface UsageWindow {
+  service: UsageService;
+  outcome: UsageOutcome;
+  today: number;
+  week: number;
+  month: number;
+  total: number;
+  costMonth: number;
+  costTotal: number;
+}
+
+export interface AdminStats {
+  users: { total: number; week: number; month: number };
+  vehicles: number;
+  storedIllustrations: number;
+  usage: UsageWindow[];
+  /** Últimos 14 días, del más antiguo al más reciente, sin huecos. */
+  daily: { day: string; gemini: number; cacheHits: number; apiNinjas: number }[];
+  topMakes: { make: string; count: number }[];
+  people: {
+    id: string;
+    email: string;
+    name: string;
+    createdAt: string;
+    vehicles: number;
+    images: number;
+    costUsd: number;
+    lastActivity: string | null;
+  }[];
+}
+
+export async function adminStats(): Promise<AdminStats> {
+  const p = await getPool();
+
+  const [users, vehicles, illustrations, usage, daily, makes, people] = await Promise.all([
+    p.query(`
+      SELECT count(*)::int AS total,
+             count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS week,
+             count(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS month
+      FROM users`),
+    p.query('SELECT count(*)::int AS n FROM vehicles'),
+    p.query('SELECT count(*)::int AS n FROM illustrations'),
+    p.query(`
+      SELECT service, outcome,
+             count(*) FILTER (WHERE at >= date_trunc('day', now()))::int AS today,
+             count(*) FILTER (WHERE at > now() - interval '7 days')::int AS week,
+             count(*) FILTER (WHERE at > now() - interval '30 days')::int AS month,
+             count(*)::int AS total,
+             coalesce(sum(cost_usd) FILTER (WHERE at > now() - interval '30 days'), 0)::float AS cost_month,
+             coalesce(sum(cost_usd), 0)::float AS cost_total
+      FROM usage_events GROUP BY service, outcome`),
+    p.query(`
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+             count(e.id) FILTER (WHERE e.service = 'gemini' AND e.outcome = 'ok')::int AS gemini,
+             count(e.id) FILTER (WHERE e.service = 'illustration-cache')::int AS cache_hits,
+             count(e.id) FILTER (WHERE e.service = 'api-ninjas')::int AS api_ninjas
+      FROM generate_series(date_trunc('day', now()) - interval '13 days',
+                           date_trunc('day', now()), interval '1 day') AS d(day)
+      LEFT JOIN usage_events e ON date_trunc('day', e.at) = d.day
+      GROUP BY d.day ORDER BY d.day`),
+    p.query(`
+      SELECT data->>'make' AS make, count(*)::int AS count
+      FROM vehicles GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 8`),
+    p.query(`
+      SELECT u.id, u.email, u.name, u.created_at,
+             (SELECT count(*) FROM vehicles v WHERE v.user_id = u.id)::int AS vehicles,
+             count(e.id) FILTER (WHERE e.service = 'gemini' AND e.outcome = 'ok')::int AS images,
+             coalesce(sum(e.cost_usd), 0)::float AS cost_usd,
+             max(e.at) AS last_activity
+      FROM users u LEFT JOIN usage_events e ON e.user_id = u.id
+      GROUP BY u.id ORDER BY u.created_at DESC`),
+  ]);
+
+  return {
+    users: users.rows[0],
+    vehicles: vehicles.rows[0]['n'],
+    storedIllustrations: illustrations.rows[0]['n'],
+    usage: usage.rows.map((r) => ({
+      service: r['service'],
+      outcome: r['outcome'],
+      today: r['today'],
+      week: r['week'],
+      month: r['month'],
+      total: r['total'],
+      costMonth: r['cost_month'],
+      costTotal: r['cost_total'],
+    })),
+    daily: daily.rows.map((r) => ({
+      day: r['day'],
+      gemini: r['gemini'],
+      cacheHits: r['cache_hits'],
+      apiNinjas: r['api_ninjas'],
+    })),
+    topMakes: makes.rows,
+    people: people.rows.map((r) => ({
+      id: r['id'],
+      email: r['email'],
+      name: r['name'],
+      createdAt: (r['created_at'] as Date).toISOString(),
+      vehicles: r['vehicles'],
+      images: r['images'],
+      costUsd: r['cost_usd'],
+      lastActivity: r['last_activity'] ? (r['last_activity'] as Date).toISOString() : null,
+    })),
+  };
 }
 
 /* --- Usuarios -------------------------------------------------------------- */

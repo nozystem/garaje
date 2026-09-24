@@ -542,3 +542,14 @@ describe('vehicle illustration', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('admin stats', () => {
+  it('refuses anyone who is not in ADMIN_EMAILS', async () => {
+    const c = client();
+    await c.register();
+
+    const res = await c.fetch('/api/admin/stats');
+
+    expect(res.status).toBe(403);
+  });
+});

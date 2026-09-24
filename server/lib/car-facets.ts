@@ -71,17 +71,21 @@ export interface Generation {
  * el inicio de la siguiente. No se usa el año mínimo porque la API tiene
  * versiones mal fechadas (un Golf Mk2 de 1974, un Corolla E120 de 1992).
  */
-export async function generationsFor(make: string, model: string): Promise<Generation[] | null> {
+export async function generationsFor(
+  make: string,
+  model: string,
+  track?: (ok: boolean) => void
+): Promise<Generation[] | null> {
   const base = buildQuery(new URLSearchParams({ make, model, facets: 'generation' }));
   if (!base) return null;
 
-  const list = await carFacets(base);
+  const list = await carFacets(base, track);
   if (!list) return null;
 
   const starts = await Promise.all(
     (list.generation ?? []).map(async ({ value }) => {
       const query = buildQuery(new URLSearchParams({ make, model, generation: value, facets: 'year' }));
-      const years = query ? (await carFacets(query))?.year : undefined;
+      const years = query ? (await carFacets(query, track))?.year : undefined;
       const launch = [...(years ?? [])].sort((a, b) => b.count - a.count)[0];
       const from = Number(launch?.value);
       return Number.isFinite(from) ? { value, from } : null;
@@ -95,7 +99,14 @@ export async function generationsFor(make: string, model: string): Promise<Gener
   return sorted.map((g, i) => ({ ...g, to: sorted[i + 1]?.from ?? null }));
 }
 
-export async function carFacets(query: URLSearchParams): Promise<Facets | null> {
+/**
+ * `track` se llama solo cuando se pregunta de verdad a API Ninjas, no con
+ * las respuestas en caché, para que el panel cuente la cuota real gastada.
+ */
+export async function carFacets(
+  query: URLSearchParams,
+  track?: (ok: boolean) => void
+): Promise<Facets | null> {
   const apiKey = process.env['API_NINJAS_KEY'];
   if (!apiKey) return null;
 
@@ -108,6 +119,7 @@ export async function carFacets(query: URLSearchParams): Promise<Facets | null> 
       headers: { 'X-Api-Key': apiKey },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    track?.(res.ok);
     if (!res.ok) throw new Error(`API Ninjas answered ${res.status}`);
 
     const body = (await res.json()) as Record<string, unknown>;

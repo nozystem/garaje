@@ -42,12 +42,25 @@ export function userIdFrom(req: IncomingMessage): string | null {
   return token ? verifyToken(token) : null;
 }
 
+/**
+ * Los admins se definen en ADMIN_EMAILS (separados por comas), no en la base
+ * de datos: así nadie puede darse permisos desde la app.
+ */
+export function isAdmin(email: string): boolean {
+  const admins = (process.env['ADMIN_EMAILS'] ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return admins.includes(email.trim().toLowerCase());
+}
+
 function toPublic(user: StoredUser): PublicUser {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     createdAt: user.createdAt,
+    isAdmin: isAdmin(user.email),
   };
 }
 

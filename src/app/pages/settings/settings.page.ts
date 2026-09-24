@@ -19,6 +19,7 @@ import {
   downloadOutline,
   logOutOutline,
   personCircleOutline,
+  statsChartOutline,
   trashOutline,
 } from 'ionicons/icons';
 
@@ -49,9 +50,13 @@ export class SettingsPage {
 
   constructor() {
     addIcons({
-      downloadOutline, logOutOutline, personCircleOutline, trashOutline,
+      downloadOutline, logOutOutline, personCircleOutline, statsChartOutline, trashOutline,
     });
     void this.store.load();
+  }
+
+  openAdmin(): void {
+    void this.router.navigate(['/admin']);
   }
 
   exportData(): void {

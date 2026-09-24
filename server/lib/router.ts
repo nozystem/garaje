@@ -14,6 +14,7 @@ import {
   handleLogout,
   handleMe,
   handleRegister,
+  isAdmin,
   userIdFrom,
 } from './auth.ts';
 import {
@@ -23,6 +24,7 @@ import {
   isConfigured as isFacetsConfigured,
 } from './car-facets.ts';
 import {
+  COST_PER_IMAGE_USD,
   generateIllustration,
   illustrationKey,
   isConfigured as isIllustrationConfigured,
@@ -31,11 +33,14 @@ import { loadCatalog, makesForType } from './catalog.ts';
 import {
   deleteUser,
   findById,
+  adminStats,
   findIllustration,
+  findUserById,
   getPool,
   loadSnapshot,
   remove,
   removeVehicleCascade,
+  recordUsage,
   saveIllustration,
   upsert,
 } from './store.ts';
@@ -111,6 +116,23 @@ export async function handleRequest(
     return;
   }
 
+  if (path === '/api/admin/stats') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    const user = await findUserById(userId);
+    if (!user || !isAdmin(user.email)) {
+      json(res, 403, { error: 'Admins only' });
+      return;
+    }
+    json(res, 200, await adminStats());
+    return;
+  }
+
+  // Se esperan antes de responder: en Vercel la función puede congelarse en
+  // cuanto sale la respuesta y un registro pendiente se perdería.
+  const pendingUsage: Promise<void>[] = [];
+  const trackNinjas = (ok: boolean) =>
+    pendingUsage.push(recordUsage({ userId, service: 'api-ninjas', outcome: ok ? 'ok' : 'error' }));
+
   // Detrás del login: cada consulta gasta cuota de API Ninjas.
   if (path === '/api/catalog/generations') {
     if (method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -123,7 +145,8 @@ export async function handleRequest(
     const model = url.searchParams.get('model') ?? '';
     if (!make.trim() || !model.trim()) return badRequest(res, ['Make and model are required']);
 
-    const generations = await generationsFor(make, model);
+    const generations = await generationsFor(make, model, trackNinjas);
+    await Promise.all(pendingUsage);
     if (!generations) {
       json(res, 502, { error: 'Car data is not available right now' });
       return;
@@ -144,7 +167,8 @@ export async function handleRequest(
     const query = buildFacetQuery(url.searchParams);
     if (!query) return badRequest(res, ['Invalid facet query']);
 
-    const facets = await carFacets(query);
+    const facets = await carFacets(query, trackNinjas);
+    await Promise.all(pendingUsage);
     if (!facets) {
       json(res, 502, { error: 'Car data is not available right now' });
       return;
@@ -241,13 +265,21 @@ async function handleVehicles(
     const key = illustrationKey(existing);
     let illustration = fresh ? null : await findIllustration(key);
 
-    if (!illustration) {
+    if (illustration) {
+      await recordUsage({ userId, service: 'illustration-cache', outcome: 'ok' });
+    } else {
       if (!isIllustrationConfigured()) {
         json(res, 503, { error: 'Illustrations are not configured' });
         return;
       }
 
       illustration = await generateIllustration(existing);
+      await recordUsage({
+        userId,
+        service: 'gemini',
+        outcome: illustration ? 'ok' : 'error',
+        costUsd: illustration ? COST_PER_IMAGE_USD : 0,
+      });
       if (!illustration) {
         json(res, 502, { error: 'The illustration could not be created' });
         return;

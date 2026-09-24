@@ -18,6 +18,9 @@ export interface IllustrationQuery {
 const MODEL = 'gemini-3.1-flash-lite-image';
 const REQUEST_TIMEOUT_MS = 90_000;
 
+/** Precio oficial de una imagen 1K de ese modelo, para el panel de admin. */
+export const COST_PER_IMAGE_USD = 0.0336;
+
 /** Los colores del formulario, con un nombre que el modelo entienda. */
 const COLOR_NAMES: Record<string, string> = {
   '#e74c3c': 'bright red',
