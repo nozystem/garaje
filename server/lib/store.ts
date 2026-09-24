@@ -87,6 +87,14 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Planes de mantenimiento propuestos por la IA, por modelo de coche e
+    -- idioma: los intervalos no dependen de los kilómetros de cada uno.
+    CREATE TABLE IF NOT EXISTS ai_plans (
+      key TEXT PRIMARY KEY,
+      tasks JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     -- Una fila por llamada a un servicio externo, para el panel de admin.
     -- Sobrevive al borrado del usuario para que las cifras de gasto cuadren.
     CREATE TABLE IF NOT EXISTS usage_events (
@@ -123,9 +131,31 @@ export async function saveIllustration(key: string, image: string): Promise<void
   );
 }
 
+/* --- Planes de mantenimiento de la IA ------------------------------------- */
+
+export async function findAiPlan<T>(key: string): Promise<T | null> {
+  const p = await getPool();
+  const result = await p.query('SELECT tasks FROM ai_plans WHERE key = $1', [key]);
+  return (result.rows[0]?.['tasks'] as T | undefined) ?? null;
+}
+
+export async function saveAiPlan(key: string, tasks: unknown): Promise<void> {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO ai_plans (key, tasks) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET tasks = EXCLUDED.tasks, created_at = now()`,
+    [key, JSON.stringify(tasks)]
+  );
+}
+
 /* --- Uso de servicios externos -------------------------------------------- */
 
-export type UsageService = 'gemini' | 'illustration-cache' | 'api-ninjas';
+export type UsageService =
+  | 'gemini'
+  | 'illustration-cache'
+  | 'gemini-plan'
+  | 'plan-cache'
+  | 'api-ninjas';
 export type UsageOutcome = 'ok' | 'error';
 
 export interface UsageEvent {

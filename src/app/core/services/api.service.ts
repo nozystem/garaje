@@ -3,8 +3,21 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-import { MaintenancePlan, MaintenanceRecord } from '../models/maintenance.model';
+import {
+  MaintenanceCategory,
+  MaintenancePlan,
+  MaintenanceRecord,
+} from '../models/maintenance.model';
 import { Vehicle, VehicleDraft } from '../models/vehicle.model';
+
+/** Espejo de SuggestedTask en server/lib/maintenance-plan.ts. */
+export interface SuggestedTask {
+  category: MaintenanceCategory;
+  title: string;
+  intervalKm: number | null;
+  intervalMonths: number | null;
+  why: string;
+}
 
 export interface GarageSnapshot {
   vehicles: Vehicle[];
@@ -44,6 +57,17 @@ export class ApiService {
   updateVehicle(id: string, draft: VehicleDraft): Observable<Vehicle> {
     return this.http
       .put<Vehicle>(`${this.base}/vehicles/${id}`, draft, { withCredentials: true })
+      .pipe(catchError(this.toFriendlyError));
+  }
+
+  /** Tareas de mantenimiento propuestas por la IA para ese coche. */
+  suggestPlan(id: string, lang: string): Observable<{ tasks: SuggestedTask[] }> {
+    return this.http
+      .post<{ tasks: SuggestedTask[] }>(
+        `${this.base}/vehicles/${id}/maintenance-plan`,
+        { lang },
+        { withCredentials: true }
+      )
       .pipe(catchError(this.toFriendlyError));
   }
 

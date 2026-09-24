@@ -197,6 +197,14 @@ async function ensureSchema(p) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Planes de mantenimiento propuestos por la IA, por modelo de coche e
+    -- idioma: los intervalos no dependen de los kil\xF3metros de cada uno.
+    CREATE TABLE IF NOT EXISTS ai_plans (
+      key TEXT PRIMARY KEY,
+      tasks JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     -- Una fila por llamada a un servicio externo, para el panel de admin.
     -- Sobrevive al borrado del usuario para que las cifras de gasto cuadren.
     CREATE TABLE IF NOT EXISTS usage_events (
@@ -225,6 +233,19 @@ async function saveIllustration(key, image) {
     `INSERT INTO illustrations (key, image) VALUES ($1, $2)
      ON CONFLICT (key) DO UPDATE SET image = EXCLUDED.image, created_at = now()`,
     [key, image]
+  );
+}
+async function findAiPlan(key) {
+  const p = await getPool();
+  const result = await p.query("SELECT tasks FROM ai_plans WHERE key = $1", [key]);
+  return result.rows[0]?.["tasks"] ?? null;
+}
+async function saveAiPlan(key, tasks) {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO ai_plans (key, tasks) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET tasks = EXCLUDED.tasks, created_at = now()`,
+    [key, JSON.stringify(tasks)]
   );
 }
 async function recordUsage(event) {
@@ -765,10 +786,141 @@ function makesForType(type) {
   })).filter((make) => make.models.length > 0);
 }
 
+// server/lib/maintenance-plan.ts
+var MODEL2 = "gemini-3.8-flash";
+var REQUEST_TIMEOUT_MS3 = 9e4;
+var USD_PER_M_INPUT = 0.75;
+var USD_PER_M_OUTPUT = 3.75;
+var CATEGORIES = [
+  "oil",
+  "filters",
+  "brakes",
+  "tires",
+  "battery",
+  "coolant",
+  "timing-belt",
+  "inspection",
+  "insurance",
+  "other"
+];
+var SCHEMA = {
+  type: "object",
+  properties: {
+    tasks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          category: { type: "string", enum: CATEGORIES },
+          title: { type: "string" },
+          intervalKm: { type: ["integer", "null"] },
+          intervalMonths: { type: ["integer", "null"] },
+          why: { type: "string" }
+        },
+        required: ["category", "title", "intervalKm", "intervalMonths", "why"]
+      }
+    }
+  },
+  required: ["tasks"]
+};
+var LANGUAGE_NAMES = { en: "English", es: "Spanish" };
+function plain3(text) {
+  return (text ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+}
+function planKey(q, lang) {
+  return [
+    "v1",
+    lang,
+    plain3(q.make),
+    plain3(q.model),
+    plain3(q.generation) || String(q.year),
+    plain3(q.fuel),
+    plain3(q.engine),
+    plain3(q.transmission)
+  ].join("|");
+}
+function isConfigured3() {
+  return Boolean(process.env["GEMINI_API_KEY"]);
+}
+function describe(q) {
+  return [
+    `${q.year} ${q.make} ${q.model}`,
+    q.generation && `generation: ${q.generation}`,
+    q.body && `body: ${q.body}`,
+    `fuel: ${q.fuel}`,
+    q.engine && `engine: ${q.engine}`,
+    q.transmission && `gearbox: ${q.transmission.replace(/_/g, " ")}`
+  ].filter(Boolean).join(", ");
+}
+function promptFor2(q, lang) {
+  return [
+    "You are an expert car mechanic. Build the recommended maintenance schedule for this exact car,",
+    "following the manufacturer's service schedule for its engine and generation.",
+    `Car: ${describe(q)}. Market: Spain.`,
+    "Include every recurring item that applies to this car (engine oil and filter, air, fuel and",
+    "cabin filters, brake pads and fluid, coolant, timing belt or chain, spark or glow plugs,",
+    "gearbox oil, auxiliary belt, battery, tyres, ITV roadworthiness test...), and nothing that",
+    "does not apply (for example no oil changes on an electric car).",
+    "Give intervals in km and/or months as the manufacturer recommends; use null when one does not apply.",
+    `Write the titles (max 6 words) and the short 'why' (max 12 words) in ${LANGUAGE_NAMES[lang]}.`
+  ].join(" ");
+}
+function sanitize(raw) {
+  const tasks = raw?.tasks;
+  if (!Array.isArray(tasks)) return [];
+  const interval = (value, max) => Number.isInteger(value) && value > 0 && value <= max ? value : null;
+  return tasks.map((t) => ({
+    category: CATEGORIES.includes(t["category"]) ? t["category"] : "other",
+    title: String(t["title"] ?? "").trim().slice(0, 120),
+    intervalKm: interval(t["intervalKm"], 1e6),
+    intervalMonths: interval(t["intervalMonths"], 240),
+    why: String(t["why"] ?? "").trim().slice(0, 200)
+  })).filter((t) => t.title && (t.intervalKm || t.intervalMonths)).slice(0, 30);
+}
+function findJson(node) {
+  if (typeof node === "string") return node.trim().startsWith("{") ? node : null;
+  if (!node || typeof node !== "object") return null;
+  for (const value of Object.values(node)) {
+    const found = findJson(value);
+    if (found) return found;
+  }
+  return null;
+}
+async function suggestPlan(q, lang) {
+  const apiKey = process.env["GEMINI_API_KEY"];
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL2,
+        input: promptFor2(q, lang),
+        response_format: { type: "text", mime_type: "application/json", schema: SCHEMA }
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS3)
+    });
+    if (!res.ok) {
+      console.error(`Gemini answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      return null;
+    }
+    const body = await res.json();
+    const json2 = findJson(body);
+    const tasks = json2 ? sanitize(JSON.parse(json2)) : [];
+    if (!tasks.length) return null;
+    const usage = body.usage ?? {};
+    const costUsd = ((usage.total_input_tokens ?? 0) * USD_PER_M_INPUT + ((usage.total_output_tokens ?? 0) + (usage.total_thought_tokens ?? 0)) * USD_PER_M_OUTPUT) / 1e6;
+    return { tasks, costUsd };
+  } catch (error) {
+    console.error("Gemini maintenance plan failed:", error);
+    return null;
+  }
+}
+
 // server/lib/validate.ts
 var VEHICLE_TYPES = ["car", "motorcycle", "van"];
 var FUEL_TYPES = ["gasoline", "diesel", "electric", "hybrid"];
-var CATEGORIES = [
+var CATEGORIES2 = [
   "oil",
   "filters",
   "brakes",
@@ -869,7 +1021,7 @@ function validateRecord(input) {
   if (!title) errors.push("Title is required");
   if (!date) errors.push("Invalid date");
   if (mileage === null) errors.push("Mileage must be a positive number");
-  if (!category || !CATEGORIES.includes(category)) errors.push("Invalid category");
+  if (!category || !CATEGORIES2.includes(category)) errors.push("Invalid category");
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -896,7 +1048,7 @@ function validatePlan(input) {
   const intervalMonths = num(body["intervalMonths"], 1, 240);
   if (!vehicleId) errors.push("Vehicle is required");
   if (!title) errors.push("Title is required");
-  if (!category || !CATEGORIES.includes(category)) errors.push("Invalid category");
+  if (!category || !CATEGORIES2.includes(category)) errors.push("Invalid category");
   if (intervalKm === null && intervalMonths === null) {
     errors.push("Set an interval in kilometres, in months, or both");
   }
@@ -1089,6 +1241,35 @@ async function handleVehicles(res, method, userId, id, action, body) {
   }
   const existing = await findById("vehicles", userId, id);
   if (!existing) return notFound(res);
+  if (action === "maintenance-plan") {
+    if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+    const lang = body?.lang === "es" ? "es" : "en";
+    const key = planKey(existing, lang);
+    const cached = await findAiPlan(key);
+    if (cached) {
+      await recordUsage({ userId, service: "plan-cache", outcome: "ok" });
+      json(res, 200, { tasks: cached });
+      return;
+    }
+    if (!isConfigured3()) {
+      json(res, 503, { error: "Maintenance plans are not configured" });
+      return;
+    }
+    const plan = await suggestPlan(existing, lang);
+    await recordUsage({
+      userId,
+      service: "gemini-plan",
+      outcome: plan ? "ok" : "error",
+      costUsd: plan?.costUsd ?? 0
+    });
+    if (!plan) {
+      json(res, 502, { error: "The maintenance plan could not be created" });
+      return;
+    }
+    await saveAiPlan(key, plan.tasks);
+    json(res, 200, { tasks: plan.tasks });
+    return;
+  }
   if (action === "illustration" && method === "GET") {
     return sendIllustration(res, existing);
   }

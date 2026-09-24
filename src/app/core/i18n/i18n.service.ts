@@ -114,6 +114,8 @@ const SERVER_MESSAGES: Record<string, TranslationKey> = {
   'The vehicle does not exist': 'error.vehicleMissing',
   'Illustrations are not configured': 'error.illustrationsOff',
   'The illustration could not be created': 'error.illustrationFailed',
+  'Maintenance plans are not configured': 'error.plansOff',
+  'The maintenance plan could not be created': 'error.planFailed',
   'Cannot reach the server': 'error.offline',
   'The request could not be completed': 'error.generic',
   'That file is not an image': 'error.notAnImage',

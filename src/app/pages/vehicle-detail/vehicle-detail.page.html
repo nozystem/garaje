@@ -111,10 +111,16 @@
           </div>
         }
 
-        <ion-button expand="block" fill="outline" class="add" (click)="openPlanForm()">
-          <ion-icon slot="start" name="add-outline"></ion-icon>
-          {{ 'detail.addPlan' | t }}
-        </ion-button>
+        <div class="add-buttons">
+          <ion-button expand="block" class="add" (click)="aiPlanOpen.set(true)">
+            <ion-icon slot="start" name="sparkles-outline"></ion-icon>
+            {{ 'detail.generatePlan' | t }}
+          </ion-button>
+          <ion-button expand="block" fill="outline" class="add" (click)="openPlanForm()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
+            {{ 'detail.addPlan' | t }}
+          </ion-button>
+        </div>
       } @else {
         @if (records().length) {
           <ion-list class="panel" [inset]="true">
@@ -176,6 +182,17 @@
         {{ 'detail.deleteVehicle' | t }}
       </ion-button>
     </div>
+    <ion-modal [isOpen]="aiPlanOpen()" (didDismiss)="aiPlanOpen.set(false)">
+      <ng-template>
+        <app-plan-suggestions
+          [vehicle]="v"
+          [existing]="store.plans()"
+          (accepted)="addSuggestedPlans($event)"
+          (dismissed)="aiPlanOpen.set(false)"
+        ></app-plan-suggestions>
+      </ng-template>
+    </ion-modal>
+
     <ion-modal
       [isOpen]="planModalOpen()"
       (didDismiss)="closePlanForm()"

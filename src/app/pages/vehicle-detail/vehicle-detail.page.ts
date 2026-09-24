@@ -37,6 +37,7 @@ import { GarageStore } from '../../core/services/garage.store';
 import { CarIllustrationComponent } from '../../shared/car-illustration.component';
 import { PlanDraft, PlanFormComponent } from '../../shared/plan-form.component';
 import { PlanStatusCardComponent } from '../../shared/plan-status-card.component';
+import { PlanSuggestionsComponent } from '../../shared/plan-suggestions.component';
 import {
   CategoryIconPipe,
   CategoryLabelPipe,
@@ -54,7 +55,7 @@ type Tab = 'plans' | 'history';
     IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon,
     IonItem, IonLabel, IonList, IonModal, IonNote, IonSegment,
     IonSegmentButton, IonSpinner, IonTitle, IonToolbar,
-    PlanFormComponent, PlanStatusCardComponent,
+    PlanFormComponent, PlanStatusCardComponent, PlanSuggestionsComponent,
     CategoryIconPipe, CategoryLabelPipe, KmPipe,
   ],
 })
@@ -70,6 +71,7 @@ export class VehicleDetailPage implements OnInit {
   readonly tab = signal<Tab>('plans');
 
   readonly planModalOpen = signal(false);
+  readonly aiPlanOpen = signal(false);
   readonly editingPlan = signal<MaintenancePlan | null>(null);
 
   readonly vehicle = computed(() => this.store.vehicle(this.vehicleId()));
@@ -184,6 +186,21 @@ export class VehicleDetailPage implements OnInit {
   closePlanForm(): void {
     this.planModalOpen.set(false);
     this.editingPlan.set(null);
+  }
+
+  /** Añade las tareas elegidas del plan de la IA, una tras otra. */
+  async addSuggestedPlans(drafts: PlanDraft[]): Promise<void> {
+    this.aiPlanOpen.set(false);
+    let added = 0;
+    try {
+      for (const draft of drafts) {
+        await this.store.addPlan(draft);
+        added++;
+      }
+      await this.toast(this.i18n.t('detail.plansAdded', { n: added }), 'success');
+    } catch (error) {
+      await this.toast((error as Error).message, 'danger');
+    }
   }
 
   async savePlan(draft: PlanDraft): Promise<void> {

@@ -51,6 +51,21 @@
       <p class="note">{{ 'admin.failed' | t: { n: gemini().errorsMonth } }}</p>
     }
 
+    <div class="tiles tiles--gap">
+      <div class="tile">
+        <span class="tile__value">{{ plans().month }}</span>
+        <span class="tile__label">{{ 'admin.plans' | t }}</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ plans().reusedMonth }}</span>
+        <span class="tile__label">{{ 'admin.plansReused' | t }}</span>
+      </div>
+      <div class="tile">
+        <span class="tile__value">{{ plans().costMonth | number: '1.2-2' : i18n.locale() }} $</span>
+        <span class="tile__label">{{ 'admin.plansSpent' | t }}</span>
+      </div>
+    </div>
+
     <div class="card chart">
       <p class="chart__title">{{ 'admin.perDay' | t }}</p>
       <div class="bars" role="list">

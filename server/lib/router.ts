@@ -32,9 +32,17 @@ import {
 } from './car-illustration.ts';
 import { loadCatalog, makesForType } from './catalog.ts';
 import {
+  isConfigured as isPlanConfigured,
+  planKey,
+  suggestPlan,
+  type PlanLang,
+  type SuggestedTask,
+} from './maintenance-plan.ts';
+import {
   deleteUser,
   findById,
   adminStats,
+  findAiPlan,
   findIllustration,
   findUserById,
   getPool,
@@ -42,6 +50,7 @@ import {
   remove,
   removeVehicleCascade,
   recordUsage,
+  saveAiPlan,
   saveIllustration,
   upsert,
 } from './store.ts';
@@ -269,6 +278,39 @@ async function handleVehicles(
 
   const existing = await findById<StoredVehicle>('vehicles', userId, id);
   if (!existing) return notFound(res);
+
+  if (action === 'maintenance-plan') {
+    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+    const lang: PlanLang = (body as { lang?: unknown } | null)?.lang === 'es' ? 'es' : 'en';
+    const key = planKey(existing, lang);
+
+    // Un plan por modelo e idioma: el mismo coche no vuelve a costar nada.
+    const cached = await findAiPlan<SuggestedTask[]>(key);
+    if (cached) {
+      await recordUsage({ userId, service: 'plan-cache', outcome: 'ok' });
+      json(res, 200, { tasks: cached });
+      return;
+    }
+    if (!isPlanConfigured()) {
+      json(res, 503, { error: 'Maintenance plans are not configured' });
+      return;
+    }
+
+    const plan = await suggestPlan(existing, lang);
+    await recordUsage({
+      userId,
+      service: 'gemini-plan',
+      outcome: plan ? 'ok' : 'error',
+      costUsd: plan?.costUsd ?? 0,
+    });
+    if (!plan) {
+      json(res, 502, { error: 'The maintenance plan could not be created' });
+      return;
+    }
+    await saveAiPlan(key, plan.tasks);
+    json(res, 200, { tasks: plan.tasks });
+    return;
+  }
 
   if (action === 'illustration' && method === 'GET') {
     return sendIllustration(res, existing);

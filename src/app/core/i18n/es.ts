@@ -176,6 +176,8 @@ export const es: Record<TranslationKey, string> = {
   'detail.deleteText': 'También se borrarán su historial y sus tareas. No se puede deshacer.',
   'detail.deleted': 'Vehículo eliminado',
   'detail.recordDeleted': 'Registro borrado',
+  'detail.generatePlan': 'Generar plan con IA',
+  'detail.plansAdded': '{n} tareas añadidas',
 
   // body
   'body.sedan': 'Berlina',
@@ -276,6 +278,9 @@ export const es: Record<TranslationKey, string> = {
   'admin.colImages': 'Imágenes',
   'admin.colSpent': 'Gasto',
   'admin.colLast': 'Último uso de API',
+  'admin.plans': 'Planes IA · 30 días',
+  'admin.plansSpent': 'Gastado en planes · 30 días',
+  'admin.plansReused': 'Planes reutilizados · 30 días',
 
   // error
   'error.emailTaken': 'Ya existe una cuenta con ese email',
@@ -305,4 +310,23 @@ export const es: Record<TranslationKey, string> = {
   'error.notAnImage': 'Ese archivo no es una imagen',
   'error.imageProcessing': 'No se ha podido procesar la imagen',
   'error.imageTooLarge': 'La imagen es demasiado grande, prueba con otra',
+  'error.plansOff': 'Los planes de mantenimiento no están configurados',
+  'error.planFailed': 'No se ha podido crear el plan de mantenimiento',
+
+  // ai
+  'ai.title': 'Plan de mantenimiento con IA',
+  'ai.add': 'Añadir {n}',
+  'ai.loading': 'Preparando el plan de tu coche… unos 15 segundos',
+  'ai.intro': 'Calendario del fabricante para tu {car} con {km}. Desmarca lo que no quieras e indica cuándo se hizo cada cosa por última vez, si lo sabes.',
+  'ai.colTask': 'Tarea',
+  'ai.colEvery': 'Cada',
+  'ai.colLast': 'Última vez',
+  'ai.colNext': 'Próxima',
+  'ai.tracked': 'Ya la tienes',
+  'ai.state.unknown': 'No lo sé',
+  'ai.state.recent': 'Hace poco',
+  'ai.state.at': 'Cuándo…',
+  'ai.inKm': 'en {km}',
+  'ai.lateKm': '{km} pasada',
+  'ai.note': 'Sugerido por IA a partir del calendario habitual del fabricante. Revisa el libro de mantenimiento: tu coche puede variar. Con "No lo sé" se supone que cada tarea se hizo a su tiempo, en su último intervalo.',
 };

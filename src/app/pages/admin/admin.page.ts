@@ -21,7 +21,7 @@ import { I18n } from '../../core/i18n/i18n.service';
 
 /** Espejo de AdminStats en server/lib/store.ts. */
 interface UsageWindow {
-  service: 'gemini' | 'illustration-cache' | 'api-ninjas';
+  service: 'gemini' | 'illustration-cache' | 'gemini-plan' | 'plan-cache' | 'api-ninjas';
   outcome: 'ok' | 'error';
   today: number;
   week: number;
@@ -94,6 +94,12 @@ export class AdminPage implements OnInit {
     const total = this.count('illustration-cache', 'total');
     return { month, total, savedTotal: total * COST_PER_IMAGE_USD };
   });
+
+  readonly plans = computed(() => ({
+    month: this.count('gemini-plan', 'month'),
+    reusedMonth: this.count('plan-cache', 'month'),
+    costMonth: this.cost('gemini-plan', 'costMonth'),
+  }));
 
   readonly ninjas = computed(() => ({
     today: this.count('api-ninjas', 'today'),

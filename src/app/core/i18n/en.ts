@@ -177,6 +177,8 @@ export const en = {
   'detail.deleteText': 'Its history and scheduled tasks will go too. This cannot be undone.',
   'detail.deleted': 'Vehicle deleted',
   'detail.recordDeleted': 'Record deleted',
+  'detail.generatePlan': 'Generate plan with AI',
+  'detail.plansAdded': '{n} tasks added',
 
   // body
   'body.sedan': 'Sedan',
@@ -277,6 +279,9 @@ export const en = {
   'admin.colImages': 'Images',
   'admin.colSpent': 'Spent',
   'admin.colLast': 'Last API use',
+  'admin.plans': 'AI plans · 30 days',
+  'admin.plansSpent': 'Spent on plans · 30 days',
+  'admin.plansReused': 'Plans reused · 30 days',
 
   // error
   'error.emailTaken': 'An account with that email already exists',
@@ -306,6 +311,25 @@ export const en = {
   'error.notAnImage': 'That file is not an image',
   'error.imageProcessing': 'The image could not be processed',
   'error.imageTooLarge': 'The image is too large, try another one',
+  'error.plansOff': 'Maintenance plans are not configured',
+  'error.planFailed': 'The maintenance plan could not be created',
+
+  // ai
+  'ai.title': 'AI maintenance plan',
+  'ai.add': 'Add {n}',
+  'ai.loading': 'Preparing a plan for your car… about 15 seconds',
+  'ai.intro': 'The manufacturer\'s schedule for your {car} with {km}. Untick what you don\'t want and say when each task was last done, if you know.',
+  'ai.colTask': 'Task',
+  'ai.colEvery': 'Every',
+  'ai.colLast': 'Last done',
+  'ai.colNext': 'Next',
+  'ai.tracked': 'Already tracked',
+  'ai.state.unknown': 'Don\'t know',
+  'ai.state.recent': 'Recently',
+  'ai.state.at': 'At…',
+  'ai.inKm': 'in {km}',
+  'ai.lateKm': '{km} late',
+  'ai.note': 'Suggested by AI from the manufacturer\'s usual schedule. Check your service book: your car may differ. With "Don\'t know", each task is assumed done on time at its last interval.',
 } as const;
 
 export type TranslationKey = keyof typeof en;

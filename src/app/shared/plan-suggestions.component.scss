@@ -1,0 +1,232 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.state {
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  padding: 80px 20px;
+  text-align: center;
+  color: var(--ion-color-medium);
+}
+
+.intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 4px 14px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ion-color-medium);
+}
+
+.intro ion-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ion-color-primary);
+}
+
+.note {
+  margin: 12px 4px 32px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--ion-color-medium);
+}
+
+/* --- Tabla ------------------------------------------------------------------ */
+
+.table {
+  overflow: hidden;
+  border-radius: var(--app-radius);
+  background: var(--ion-card-background);
+}
+
+/* En el móvil cada fila es una tarjeta: casilla, tarea y debajo sus datos. */
+.row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 6px 10px;
+  padding: 14px 14px 14px 10px;
+  border-bottom: 1px solid var(--ion-color-step-150);
+  transition: opacity 0.18s ease;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row--head {
+  display: none;
+}
+
+.row--off {
+  opacity: 0.45;
+}
+
+.cell {
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.cell--check {
+  grid-row: span 4;
+  padding-top: 2px;
+}
+
+.cell--task {
+  display: flex;
+  gap: 8px;
+}
+
+.cell--task ion-icon {
+  flex: none;
+  margin-top: 2px;
+  font-size: 17px;
+  color: var(--ion-color-medium);
+}
+
+.cell--task strong {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.cell--task small,
+.cell--next small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.74rem;
+  color: var(--ion-color-medium);
+}
+
+.late {
+  color: var(--ion-color-danger) !important;
+}
+
+.tag {
+  display: inline-block;
+  margin: 3px 0 1px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ion-color-step-150);
+  font-size: 0.68rem;
+  font-style: normal;
+  color: var(--ion-color-medium);
+}
+
+/* En el móvil cada dato lleva su etiqueta delante. */
+.cell__label {
+  display: inline-block;
+  min-width: 92px;
+  margin-right: 6px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.cell--next strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.cell--next small {
+  display: inline;
+  margin-left: 6px;
+}
+
+.choices {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.choice {
+  padding: 4px 9px;
+  border: 1px solid var(--ion-color-step-200);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ion-color-medium);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.choice--on {
+  border-color: var(--ion-color-primary);
+  background: rgba(var(--ion-color-primary-rgb), 0.14);
+  color: var(--ion-color-primary);
+}
+
+.choice:disabled {
+  cursor: default;
+}
+
+.done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--ion-color-medium);
+}
+
+.done input,
+input.done {
+  width: 110px;
+  padding: 5px 8px;
+  border: 1px solid var(--ion-color-step-200);
+  border-radius: 8px;
+  background: var(--ion-background-color);
+  color: var(--ion-text-color);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+input.done {
+  width: auto;
+}
+
+/* --- Tabla de verdad en pantallas anchas ----------------------------------- */
+
+@media (min-width: 760px) {
+  .row,
+  .row--head {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.1fr) minmax(0, 2fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .row--head {
+    padding: 10px 14px 10px 10px;
+    border-bottom: 1px solid var(--ion-color-step-150);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ion-color-medium);
+  }
+
+  .cell--check {
+    grid-row: auto;
+    padding-top: 0;
+  }
+
+  .cell__label {
+    display: none;
+  }
+
+  .cell--next small {
+    display: block;
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
+  }
+}

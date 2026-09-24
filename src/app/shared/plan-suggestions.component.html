@@ -1,0 +1,138 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="dismissed.emit()">{{ 'common.cancel' | t }}</ion-button>
+    </ion-buttons>
+    <ion-title>{{ 'ai.title' | t }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button strong="true" [disabled]="!selected()" (click)="accept()">
+        {{ 'ai.add' | t: { n: selected() } }}
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding-horizontal">
+  @if (loading()) {
+    <div class="state">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>{{ 'ai.loading' | t }}</p>
+    </div>
+  } @else if (error()) {
+    <div class="state">
+      <p>{{ error() }}</p>
+    </div>
+  } @else {
+    <p class="intro">
+      <ion-icon name="sparkles-outline" aria-hidden="true"></ion-icon>
+      {{ 'ai.intro' | t: { car: vehicle().make + ' ' + vehicle().model, km: (vehicle().mileage | km) } }}
+    </p>
+
+    <div class="table" role="table" [attr.aria-label]="'ai.title' | t">
+      <div class="row row--head" role="row">
+        <span role="columnheader"></span>
+        <span role="columnheader">{{ 'ai.colTask' | t }}</span>
+        <span role="columnheader">{{ 'ai.colEvery' | t }}</span>
+        <span role="columnheader">{{ 'ai.colLast' | t }}</span>
+        <span role="columnheader">{{ 'ai.colNext' | t }}</span>
+      </div>
+
+      @for (row of rows(); track $index; let i = $index) {
+        <div class="row" role="row" [class.row--off]="!row.include">
+          <span class="cell cell--check" role="cell">
+            <ion-checkbox
+              [checked]="row.include"
+              (ionChange)="update(i, { include: $event.detail.checked })"
+              [attr.aria-label]="row.task.title"
+            ></ion-checkbox>
+          </span>
+
+          <span class="cell cell--task" role="cell">
+            <ion-icon [name]="row.task.category | categoryIcon" aria-hidden="true"></ion-icon>
+            <span>
+              <strong>{{ row.task.title }}</strong>
+              @if (row.tracked) {
+                <em class="tag">{{ 'ai.tracked' | t }}</em>
+              }
+              <small>{{ row.task.why }}</small>
+            </span>
+          </span>
+
+          <span class="cell cell--every" role="cell">
+            <span class="cell__label">{{ 'ai.colEvery' | t }}</span>
+            @if (row.task.intervalKm) {
+              {{ row.task.intervalKm | km }}
+            }
+            @if (row.task.intervalKm && row.task.intervalMonths) {
+              ·
+            }
+            @if (row.task.intervalMonths) {
+              {{ 'unit.months' | t: { n: row.task.intervalMonths } }}
+            }
+          </span>
+
+          <span class="cell cell--last" role="cell">
+            <span class="cell__label">{{ 'ai.colLast' | t }}</span>
+            <span class="choices" role="radiogroup">
+              @for (state of states; track state) {
+                <button
+                  type="button"
+                  class="choice"
+                  role="radio"
+                  [attr.aria-checked]="row.state === state"
+                  [class.choice--on]="row.state === state"
+                  [disabled]="!row.include"
+                  (click)="update(i, { state })"
+                >
+                  {{ ('ai.state.' + state) | t }}
+                </button>
+              }
+            </span>
+            @if (row.state === 'at') {
+              @if (row.task.intervalKm) {
+                <label class="done">
+                  <input
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    [max]="vehicle().mileage"
+                    [value]="row.doneKm ?? ''"
+                    [placeholder]="vehicle().mileage"
+                    (input)="update(i, { doneKm: $any($event.target).valueAsNumber || null })"
+                  />
+                  km
+                </label>
+              } @else {
+                <input
+                  class="done"
+                  type="date"
+                  [max]="today"
+                  [value]="row.doneDate"
+                  (input)="update(i, { doneDate: $any($event.target).value })"
+                />
+              }
+            }
+          </span>
+
+          <span class="cell cell--next" role="cell">
+            <span class="cell__label">{{ 'ai.colNext' | t }}</span>
+            @if (next(row); as due) {
+              @if (due.km) {
+                <strong>{{ due.km | km }}</strong>
+                @if (due.km > vehicle().mileage) {
+                  <small>{{ 'ai.inKm' | t: { km: (due.km - vehicle().mileage | km) } }}</small>
+                } @else {
+                  <small class="late">{{ 'ai.lateKm' | t: { km: (vehicle().mileage - due.km | km) } }}</small>
+                }
+              } @else if (due.date) {
+                <strong>{{ due.date | ldate: 'MMM y' }}</strong>
+              }
+            }
+          </span>
+        </div>
+      }
+    </div>
+
+    <p class="note">{{ 'ai.note' | t }}</p>
+  }
+</ion-content>
