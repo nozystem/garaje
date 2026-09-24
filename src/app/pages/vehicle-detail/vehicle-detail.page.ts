@@ -257,9 +257,9 @@ export class VehicleDetailPage implements OnInit {
     }
   }
 
-  async illustrate(id: string, fresh: boolean): Promise<void> {
+  async illustrate(id: string): Promise<void> {
     try {
-      await this.store.illustrate(id, fresh);
+      await this.store.illustrate(id);
     } catch (error) {
       await this.toast((error as Error).message, 'danger');
     }

@@ -145,7 +145,6 @@ export const es: Record<TranslationKey, string> = {
 
   // detail
   'detail.painting': 'Pintando tu coche…',
-  'detail.newIllustration': 'Nueva ilustración',
   'detail.createIllustration': 'Crear ilustración',
   'detail.mileage': 'Kilometraje',
   'detail.overdue': 'Vencidas',

@@ -47,9 +47,9 @@ export class ApiService {
       .pipe(catchError(this.toFriendlyError));
   }
 
-  illustrateVehicle(id: string, fresh: boolean): Observable<Vehicle> {
+  illustrateVehicle(id: string): Observable<Vehicle> {
     return this.http
-      .post<Vehicle>(`${this.base}/vehicles/${id}/illustration`, { fresh }, { withCredentials: true })
+      .post<Vehicle>(`${this.base}/vehicles/${id}/illustration`, {}, { withCredentials: true })
       .pipe(catchError(this.toFriendlyError));
   }
 

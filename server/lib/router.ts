@@ -277,11 +277,10 @@ async function handleVehicles(
   if (action === 'illustration') {
     if (method !== 'POST') return methodNotAllowed(res, ['GET', 'POST']);
 
-    // `fresh` pide una distinta a la guardada ("New illustration"); sin él
-    // se reutiliza la de cualquier coche igual y no se paga otra imagen.
-    const fresh = (body as { fresh?: unknown } | null)?.fresh === true;
+    // Siempre se reutiliza la de un coche igual si existe: no hay forma de
+    // pedir otra distinta, para que nadie genere (y pague) imágenes en bucle.
     const key = illustrationKey(existing);
-    let illustration = fresh ? null : await findIllustration(key);
+    let illustration = await findIllustration(key);
 
     if (illustration) {
       await recordUsage({ userId, service: 'illustration-cache', outcome: 'ok' });

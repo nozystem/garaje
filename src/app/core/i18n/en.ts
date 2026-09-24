@@ -146,7 +146,6 @@ export const en = {
 
   // detail
   'detail.painting': 'Painting your car…',
-  'detail.newIllustration': 'New illustration',
   'detail.createIllustration': 'Create illustration',
   'detail.mileage': 'Mileage',
   'detail.overdue': 'Overdue',

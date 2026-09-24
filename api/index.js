@@ -1094,9 +1094,8 @@ async function handleVehicles(res, method, userId, id, action, body) {
   }
   if (action === "illustration") {
     if (method !== "POST") return methodNotAllowed(res, ["GET", "POST"]);
-    const fresh = body?.fresh === true;
     const key = illustrationKey(existing);
-    let illustration = fresh ? null : await findIllustration(key);
+    let illustration = await findIllustration(key);
     if (illustration) {
       await recordUsage({ userId, service: "illustration-cache", outcome: "ok" });
     } else {
