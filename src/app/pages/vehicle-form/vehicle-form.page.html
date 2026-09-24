@@ -56,6 +56,43 @@
         </button>
       }
 
+      <!-- Justo debajo del coche, para ver cómo cambia al elegir. -->
+      <div class="colors" role="group" aria-label="Colour">
+        @for (color of colors; track color) {
+          <button
+            type="button"
+            class="colors__dot"
+            [class.colors__dot--active]="form.value.color === color"
+            [class.colors__dot--light]="isLight(color)"
+            [style.background]="color"
+            (click)="form.patchValue({ color })"
+            [attr.aria-label]="'Color ' + color"
+          >
+            @if (form.value.color === color) {
+              <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
+            }
+          </button>
+        }
+        <!-- Cualquier otro color: la ilustración se pinta en el navegador. -->
+        <label
+          class="colors__dot colors__dot--custom"
+          [class.colors__dot--active]="customColor()"
+          [style.--custom]="customColor() ? form.value.color : null"
+          aria-label="Other colour"
+        >
+          <input
+            type="color"
+            [value]="form.value.color"
+            (input)="form.patchValue({ color: $any($event.target).value })"
+          />
+          @if (customColor()) {
+            <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
+          } @else {
+            <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+          }
+        </label>
+      </div>
+
       @if (form.value.photo) {
         <button type="button" class="preview__remove" (click)="removePhoto()">
           Quitar foto
@@ -322,43 +359,6 @@
           <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
           Used to estimate when each service falls due.
         </p>
-      </div>
-
-      <h3 class="group">Colour</h3>
-      <div class="colors">
-        @for (color of colors; track color) {
-          <button
-            type="button"
-            class="colors__dot"
-            [class.colors__dot--active]="form.value.color === color"
-            [class.colors__dot--light]="isLight(color)"
-            [style.background]="color"
-            (click)="form.patchValue({ color })"
-            [attr.aria-label]="'Color ' + color"
-          >
-            @if (form.value.color === color) {
-              <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
-            }
-          </button>
-        }
-        <!-- Cualquier otro color: la ilustración se pinta en el navegador. -->
-        <label
-          class="colors__dot colors__dot--custom"
-          [class.colors__dot--active]="customColor()"
-          [style.--custom]="customColor() ? form.value.color : null"
-          aria-label="Other colour"
-        >
-          <input
-            type="color"
-            [value]="form.value.color"
-            (input)="form.patchValue({ color: $any($event.target).value })"
-          />
-          @if (customColor()) {
-            <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
-          } @else {
-            <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
-          }
-        </label>
       </div>
 
       <h3 class="group">Notes</h3>
