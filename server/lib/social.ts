@@ -188,29 +188,67 @@ export async function setFollow(viewer: string, username: string, follow: boolea
   return true;
 }
 
-/** Buscar perfiles visibles por @usuario. */
-export async function searchProfiles(
-  viewer: string,
-  query: string
-): Promise<{ username: string; vehicles: number; isFollowing: boolean }[]> {
+/** Una persona en la búsqueda o en Descubrir, con una muestra de sus coches. */
+export interface ProfileMatch {
+  username: string;
+  vehicles: number;
+  followers: number;
+  isFollowing: boolean;
+  /** Sus coches más recientes, como mucho tres: la vista previa de la lista. */
+  preview: PublicVehicle[];
+}
+
+/**
+ * Personas visibles: las que coinciden con `query` (por @usuario) o, sin
+ * búsqueda, las que tienen algún coche que enseñar, de las más seguidas a las
+ * que menos. Con `make`, solo quien tiene un coche visible de esa marca.
+ */
+export async function searchProfiles(viewer: string, query: string, make?: string): Promise<ProfileMatch[]> {
   await ensureProfile(viewer);
   const p = await getPool();
   const pattern = `%${query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const visibleCar = `coalesce((v.data->>'socialHidden')::boolean, false) = false`;
   const result = await p.query(
-    `SELECT pr.username,
-       (SELECT count(*) FROM vehicles v WHERE v.user_id = pr.user_id
-          AND coalesce((v.data->>'socialHidden')::boolean, false) = false)::int AS vehicles,
+    `SELECT pr.user_id, pr.username,
+       (SELECT count(*) FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar})::int AS vehicles,
+       (SELECT count(*) FROM follows f WHERE f.followee_id = pr.user_id)::int AS followers,
        EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followee_id = pr.user_id) AS is_following
      FROM profiles pr
-     WHERE NOT pr.hidden AND pr.user_id <> $1 AND lower(pr.username) LIKE $2
-     ORDER BY length(pr.username), pr.username
-     LIMIT 30`,
-    [viewer, pattern]
+     WHERE NOT pr.hidden AND pr.user_id <> $1
+       AND ($2 = '%%' OR lower(pr.username) LIKE $2)
+       AND ($2 <> '%%' OR EXISTS (SELECT 1 FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar}))
+       AND ($3::text IS NULL OR EXISTS (
+             SELECT 1 FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar}
+               AND lower(v.data->>'make') = lower($3)))
+     ORDER BY CASE WHEN $2 = '%%' THEN 0 ELSE length(pr.username) END, followers DESC, vehicles DESC, pr.username
+     LIMIT 40`,
+    [viewer, pattern, make || null]
   );
+
+  const ids = result.rows.map((r) => r['user_id'] as string);
+  const previews = new Map<string, PublicVehicle[]>();
+  if (ids.length) {
+    const cars = await p.query(
+      `SELECT * FROM (
+         SELECT ${publicColumns('$2')}, v.user_id,
+                row_number() OVER (PARTITION BY v.user_id ORDER BY v.data->>'createdAt' DESC) AS n
+         ${VISIBLE} AND v.user_id = ANY($1::text[])
+       ) ranked WHERE n <= 3`,
+      [ids, viewer]
+    );
+    for (const row of cars.rows) {
+      const list = previews.get(row['user_id']) ?? [];
+      list.push(toPublic(row));
+      previews.set(row['user_id'], list);
+    }
+  }
+
   return result.rows.map((r) => ({
     username: r['username'],
     vehicles: r['vehicles'],
+    followers: r['followers'],
     isFollowing: r['is_following'],
+    preview: previews.get(r['user_id']) ?? [],
   }));
 }
 

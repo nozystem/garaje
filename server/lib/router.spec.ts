@@ -852,6 +852,29 @@ describe('social', () => {
     expect(profiles.map((p: { username: string }) => p.username)).toEqual([owner.username]);
   });
 
+  it('discovers people with vehicles, with a preview of up to three, filtered by make', async () => {
+    const marta = await person('marta@example.com', 'Marta');
+    const luis = await person('luis@example.com', 'Luis');
+    await person('nocar@example.com', 'Sin Coche');
+    const viewer = await person('viewer@example.com');
+    for (const model of ['León', 'Ibiza', 'Arona', 'Ateca']) {
+      await marta.c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify({ ...CAR, model, plate: 'SECRET1' }) });
+    }
+    await luis.c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify({ ...CAR, make: 'Mazda', model: 'MX-5' }) });
+    await viewer.c.fetch(`/api/social/profiles/${luis.username}/follow`, { method: 'POST' });
+
+    const { profiles } = await (await viewer.c.fetch('/api/social/search?q=')).json();
+    // Quien no tiene coches no sale en Descubrir; el más seguido va primero.
+    expect(profiles.map((p: { username: string }) => p.username)).toEqual([luis.username, marta.username]);
+    expect(profiles[0]).toMatchObject({ vehicles: 1, followers: 1, isFollowing: true });
+    expect(profiles[1].vehicles).toBe(4);
+    expect(profiles[1].preview).toHaveLength(3);
+    expect(JSON.stringify(profiles)).not.toContain('SECRET1');
+
+    const mazda = await (await viewer.c.fetch('/api/social/search?q=&make=mazda')).json();
+    expect(mazda.profiles.map((p: { username: string }) => p.username)).toEqual([luis.username]);
+  });
+
   it('a hidden profile disappears from everywhere, and so does a hidden vehicle', async () => {
     const owner = await person('owner@example.com', 'Marta');
     const viewer = await person('viewer@example.com');

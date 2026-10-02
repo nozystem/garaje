@@ -857,7 +857,7 @@ async function handleWorkshops(
  *   POST/DELETE /api/social/vehicles/:id/like
  *   GET      /api/social/profiles/:username
  *   POST/DELETE /api/social/profiles/:username/follow
- *   GET      /api/social/search?q=   /explore?make=   /feed   /makes
+ *   GET      /api/social/search?q=&make=   (personas)   /explore?make=   /feed   /makes
  */
 async function handleSocial(
   res: ServerResponse,
@@ -943,7 +943,13 @@ async function handleSocial(
 
     case 'search':
       if (method !== 'GET') return methodNotAllowed(res, ['GET']);
-      json(res, 200, { profiles: await searchProfiles(userId, (params.get('q') ?? '').trim().slice(0, 40)) });
+      json(res, 200, {
+        profiles: await searchProfiles(
+          userId,
+          (params.get('q') ?? '').trim().slice(0, 40),
+          params.get('make')?.trim() || undefined
+        ),
+      });
       return;
 
     case 'explore':

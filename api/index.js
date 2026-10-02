@@ -688,25 +688,50 @@ async function setFollow(viewer, username, follow) {
   }
   return true;
 }
-async function searchProfiles(viewer, query) {
+async function searchProfiles(viewer, query, make) {
   await ensureProfile(viewer);
   const p = await getPool();
   const pattern = `%${query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const visibleCar = `coalesce((v.data->>'socialHidden')::boolean, false) = false`;
   const result = await p.query(
-    `SELECT pr.username,
-       (SELECT count(*) FROM vehicles v WHERE v.user_id = pr.user_id
-          AND coalesce((v.data->>'socialHidden')::boolean, false) = false)::int AS vehicles,
+    `SELECT pr.user_id, pr.username,
+       (SELECT count(*) FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar})::int AS vehicles,
+       (SELECT count(*) FROM follows f WHERE f.followee_id = pr.user_id)::int AS followers,
        EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followee_id = pr.user_id) AS is_following
      FROM profiles pr
-     WHERE NOT pr.hidden AND pr.user_id <> $1 AND lower(pr.username) LIKE $2
-     ORDER BY length(pr.username), pr.username
-     LIMIT 30`,
-    [viewer, pattern]
+     WHERE NOT pr.hidden AND pr.user_id <> $1
+       AND ($2 = '%%' OR lower(pr.username) LIKE $2)
+       AND ($2 <> '%%' OR EXISTS (SELECT 1 FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar}))
+       AND ($3::text IS NULL OR EXISTS (
+             SELECT 1 FROM vehicles v WHERE v.user_id = pr.user_id AND ${visibleCar}
+               AND lower(v.data->>'make') = lower($3)))
+     ORDER BY CASE WHEN $2 = '%%' THEN 0 ELSE length(pr.username) END, followers DESC, vehicles DESC, pr.username
+     LIMIT 40`,
+    [viewer, pattern, make || null]
   );
+  const ids = result.rows.map((r) => r["user_id"]);
+  const previews = /* @__PURE__ */ new Map();
+  if (ids.length) {
+    const cars = await p.query(
+      `SELECT * FROM (
+         SELECT ${publicColumns("$2")}, v.user_id,
+                row_number() OVER (PARTITION BY v.user_id ORDER BY v.data->>'createdAt' DESC) AS n
+         ${VISIBLE} AND v.user_id = ANY($1::text[])
+       ) ranked WHERE n <= 3`,
+      [ids, viewer]
+    );
+    for (const row of cars.rows) {
+      const list = previews.get(row["user_id"]) ?? [];
+      list.push(toPublic(row));
+      previews.set(row["user_id"], list);
+    }
+  }
   return result.rows.map((r) => ({
     username: r["username"],
     vehicles: r["vehicles"],
-    isFollowing: r["is_following"]
+    followers: r["followers"],
+    isFollowing: r["is_following"],
+    preview: previews.get(r["user_id"]) ?? []
   }));
 }
 async function explore(viewer, make) {
@@ -2213,7 +2238,13 @@ async function handleSocial(res, method, userId, [section, id, action], params, 
     }
     case "search":
       if (method !== "GET") return methodNotAllowed(res, ["GET"]);
-      json(res, 200, { profiles: await searchProfiles(userId, (params.get("q") ?? "").trim().slice(0, 40)) });
+      json(res, 200, {
+        profiles: await searchProfiles(
+          userId,
+          (params.get("q") ?? "").trim().slice(0, 40),
+          params.get("make")?.trim() || void 0
+        )
+      });
       return;
     case "explore":
       if (method !== "GET") return methodNotAllowed(res, ["GET"]);
