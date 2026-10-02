@@ -170,6 +170,22 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS likes_vehicle ON likes (vehicle_id);
 
+    -- Planes en el mapa (ver meetups.ts) y quién va a cada uno.
+    CREATE TABLE IF NOT EXISTS meetups (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      starts_at TIMESTAMPTZ NOT NULL,
+      data JSONB NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS meetups_starts_at ON meetups (starts_at);
+
+    CREATE TABLE IF NOT EXISTS meetup_attendees (
+      meetup_id TEXT NOT NULL REFERENCES meetups (id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (meetup_id, user_id)
+    );
+
     -- Las cuentas sin perfil reciben uno con un @usuario sacado de su nombre
     -- (sin tildes ni símbolos) y el principio de su id, que lo hace único.
     INSERT INTO profiles (user_id, username)

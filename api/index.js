@@ -275,6 +275,22 @@ async function ensureSchema(p) {
     );
     CREATE INDEX IF NOT EXISTS likes_vehicle ON likes (vehicle_id);
 
+    -- Planes en el mapa (ver meetups.ts) y qui\xE9n va a cada uno.
+    CREATE TABLE IF NOT EXISTS meetups (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      starts_at TIMESTAMPTZ NOT NULL,
+      data JSONB NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS meetups_starts_at ON meetups (starts_at);
+
+    CREATE TABLE IF NOT EXISTS meetup_attendees (
+      meetup_id TEXT NOT NULL REFERENCES meetups (id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (meetup_id, user_id)
+    );
+
     -- Las cuentas sin perfil reciben uno con un @usuario sacado de su nombre
     -- (sin tildes ni s\xEDmbolos) y el principio de su id, que lo hace \xFAnico.
     INSERT INTO profiles (user_id, username)
@@ -1283,6 +1299,115 @@ async function suggestPlan(q, lang) {
   }
 }
 
+// server/lib/meetups.ts
+var MAX_AHEAD_MS = 366 * 864e5;
+function validateMeetup(input, now = Date.now()) {
+  const body = typeof input === "object" && input ? input : {};
+  const errors = [];
+  const text = (value, max) => typeof value === "string" && value.trim() && value.trim().length <= max ? value.trim() : null;
+  const title = text(body["title"], 80);
+  const startsAt = typeof body["startsAt"] === "string" ? new Date(body["startsAt"]) : null;
+  const latitude = typeof body["latitude"] === "number" ? body["latitude"] : NaN;
+  const longitude = typeof body["longitude"] === "number" ? body["longitude"] : NaN;
+  if (!title) errors.push("Title is required");
+  if (!startsAt || Number.isNaN(startsAt.getTime())) errors.push("Invalid date");
+  else if (startsAt.getTime() < now - 36e5 || startsAt.getTime() > now + MAX_AHEAD_MS) {
+    errors.push("The plan must be within the next year");
+  }
+  if (!(latitude >= -90 && latitude <= 90) || !(longitude >= -180 && longitude <= 180)) {
+    errors.push("Invalid location");
+  }
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      title,
+      description: text(body["description"], 1e3) ?? void 0,
+      startsAt: startsAt.toISOString(),
+      latitude,
+      longitude,
+      place: text(body["place"], 120) ?? void 0
+    }
+  };
+}
+var COLUMNS = (viewer) => `
+  m.id, m.data, pr.username AS host,
+  (SELECT count(*) FROM meetup_attendees a WHERE a.meetup_id = m.id)::int AS attendees,
+  ARRAY(SELECT p2.username FROM meetup_attendees a JOIN profiles p2 ON p2.user_id = a.user_id
+        WHERE a.meetup_id = m.id AND NOT p2.hidden ORDER BY a.created_at LIMIT 8) AS attendee_names,
+  EXISTS (SELECT 1 FROM meetup_attendees a WHERE a.meetup_id = m.id AND a.user_id = ${viewer}) AS joined,
+  m.user_id = ${viewer} AS mine`;
+function toPublic3(row) {
+  const data = row["data"];
+  return {
+    id: row["id"],
+    title: data.title,
+    description: data.description,
+    startsAt: data.startsAt,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    place: data.place,
+    host: { username: row["host"] },
+    attendees: row["attendees"],
+    attendeeNames: row["attendee_names"],
+    joinedByMe: row["joined"],
+    isMine: row["mine"],
+    createdAt: data.createdAt
+  };
+}
+async function listMeetups(viewer) {
+  await ensureProfile(viewer);
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT ${COLUMNS("$1")}
+     FROM meetups m JOIN profiles pr ON pr.user_id = m.user_id
+     WHERE (NOT pr.hidden OR m.user_id = $1) AND m.starts_at > now() - interval '3 hours'
+     ORDER BY m.starts_at LIMIT 300`,
+    [viewer]
+  );
+  return result.rows.map(toPublic3);
+}
+async function findMeetup(viewer, id) {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT ${COLUMNS("$2")}
+     FROM meetups m JOIN profiles pr ON pr.user_id = m.user_id
+     WHERE m.id = $1 AND (NOT pr.hidden OR m.user_id = $2)`,
+    [id, viewer]
+  );
+  return result.rows[0] ? toPublic3(result.rows[0]) : null;
+}
+async function createMeetup(viewer, input) {
+  await ensureProfile(viewer);
+  const p = await getPool();
+  const id = newId();
+  await p.query(
+    `INSERT INTO meetups (id, user_id, starts_at, data) VALUES ($1, $2, $3, $4)`,
+    [id, viewer, input.startsAt, JSON.stringify({ ...input, createdAt: (/* @__PURE__ */ new Date()).toISOString() })]
+  );
+  await p.query("INSERT INTO meetup_attendees (meetup_id, user_id) VALUES ($1, $2)", [id, viewer]);
+  return await findMeetup(viewer, id);
+}
+async function deleteMeetup(viewer, id) {
+  const p = await getPool();
+  const result = await p.query("DELETE FROM meetups WHERE id = $1 AND user_id = $2", [id, viewer]);
+  return (result.rowCount ?? 0) > 0;
+}
+async function setAttendance(viewer, id, going) {
+  if (!await findMeetup(viewer, id)) return null;
+  await ensureProfile(viewer);
+  const p = await getPool();
+  if (going) {
+    await p.query(
+      "INSERT INTO meetup_attendees (meetup_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      [id, viewer]
+    );
+  } else {
+    await p.query("DELETE FROM meetup_attendees WHERE meetup_id = $1 AND user_id = $2", [id, viewer]);
+  }
+  return findMeetup(viewer, id);
+}
+
 // server/lib/receipt-scan.ts
 var MODEL3 = "gemini-3.8-flash";
 var REQUEST_TIMEOUT_MS4 = 6e4;
@@ -1782,6 +1907,8 @@ async function handleRequest(req, res) {
       return handleWorkshops(res, method, userId, id, body);
     case "social":
       return handleSocial(res, method, userId, segments.slice(1), url.searchParams, body);
+    case "meetups":
+      return handleMeetups(res, method, userId, id, action, body);
     default:
       notFound(res);
   }
@@ -2261,6 +2388,39 @@ async function handleSocial(res, method, userId, [section, id, action], params, 
     default:
       notFound(res);
   }
+}
+async function handleMeetups(res, method, userId, id, action, body) {
+  if (!id) {
+    if (method === "GET") {
+      json(res, 200, { meetups: await listMeetups(userId) });
+      return;
+    }
+    if (method !== "POST") return methodNotAllowed(res, ["GET", "POST"]);
+    const parsed = validateMeetup(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    json(res, 201, { meetup: await createMeetup(userId, parsed.value) });
+    return;
+  }
+  if (action === "join") {
+    if (method !== "POST" && method !== "DELETE") return methodNotAllowed(res, ["POST", "DELETE"]);
+    const meetup = await setAttendance(userId, id, method === "POST");
+    if (!meetup) return notFound(res);
+    json(res, 200, { meetup });
+    return;
+  }
+  if (action) return notFound(res);
+  if (method === "GET") {
+    const meetup = await findMeetup(userId, id);
+    if (!meetup) return notFound(res);
+    json(res, 200, { meetup });
+    return;
+  }
+  if (method === "DELETE") {
+    if (!await deleteMeetup(userId, id)) return notFound(res);
+    json(res, 200, { deleted: id });
+    return;
+  }
+  methodNotAllowed(res, ["GET", "DELETE"]);
 }
 function withPhotoLink(item, kind) {
   if (!item.photo) return item;

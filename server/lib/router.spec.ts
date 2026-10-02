@@ -910,3 +910,78 @@ describe('social', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('meetups', () => {
+  const soon = () => new Date(Date.now() + 3 * 86_400_000).toISOString();
+
+  async function account(email: string, name = 'Ana') {
+    const c = client();
+    await c.fetch('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'a-long-enough-password', name }),
+    });
+    const { profile } = await (await c.fetch('/api/social/me')).json();
+    return { c, username: profile.username as string };
+  }
+
+  const PLAN = () => ({
+    title: 'Ruta por la sierra',
+    description: 'Salida tranquila',
+    startsAt: soon(),
+    latitude: 40.48,
+    longitude: -3.95,
+    place: 'Puerto de Navacerrada',
+  });
+
+  it('creates a plan with its host going, and others see it and join', async () => {
+    const host = await account('host@example.com', 'Marta Real');
+    const guest = await account('guest@example.com');
+
+    const created = await host.c.fetch('/api/meetups', { method: 'POST', body: JSON.stringify(PLAN()) });
+    expect(created.status).toBe(201);
+    const { meetup } = await created.json();
+    expect(meetup).toMatchObject({ title: 'Ruta por la sierra', attendees: 1, joinedByMe: true, isMine: true });
+    expect(meetup.host.username).toBe(host.username);
+
+    const { meetups } = await (await guest.c.fetch('/api/meetups')).json();
+    expect(meetups).toHaveLength(1);
+    expect(meetups[0]).toMatchObject({ joinedByMe: false, isMine: false });
+    expect(JSON.stringify(meetups)).not.toContain('Marta Real');
+    expect(JSON.stringify(meetups)).not.toContain('host@example.com');
+
+    const joined = await guest.c.fetch(`/api/meetups/${meetup.id}/join`, { method: 'POST' });
+    expect((await joined.json()).meetup).toMatchObject({ attendees: 2, joinedByMe: true });
+    const left = await guest.c.fetch(`/api/meetups/${meetup.id}/join`, { method: 'DELETE' });
+    expect((await left.json()).meetup).toMatchObject({ attendees: 1, joinedByMe: false });
+  });
+
+  it('only the host deletes a plan', async () => {
+    const host = await account('host@example.com');
+    const guest = await account('guest@example.com');
+    const { meetup } = await (await host.c.fetch('/api/meetups', { method: 'POST', body: JSON.stringify(PLAN()) })).json();
+
+    expect((await guest.c.fetch(`/api/meetups/${meetup.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await host.c.fetch(`/api/meetups/${meetup.id}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await (await guest.c.fetch('/api/meetups')).json()).meetups).toHaveLength(0);
+  });
+
+  it('rejects a plan in the past, far away in time or without a valid place', async () => {
+    const host = await account('host@example.com');
+    const post = (changes: object) =>
+      host.c.fetch('/api/meetups', { method: 'POST', body: JSON.stringify({ ...PLAN(), ...changes }) });
+    expect((await post({ startsAt: '2020-01-01T10:00:00Z' })).status).toBe(400);
+    expect((await post({ startsAt: new Date(Date.now() + 400 * 86_400_000).toISOString() })).status).toBe(400);
+    expect((await post({ latitude: 123 })).status).toBe(400);
+    expect((await post({ title: '' })).status).toBe(400);
+  });
+
+  it('hides the plans of a hidden profile', async () => {
+    const host = await account('host@example.com');
+    const guest = await account('guest@example.com');
+    await host.c.fetch('/api/meetups', { method: 'POST', body: JSON.stringify(PLAN()) });
+    await host.c.fetch('/api/social/me', { method: 'PUT', body: JSON.stringify({ hidden: true }) });
+    expect((await (await guest.c.fetch('/api/meetups')).json()).meetups).toHaveLength(0);
+    // Quien lo creó lo sigue viendo.
+    expect((await (await host.c.fetch('/api/meetups')).json()).meetups).toHaveLength(1);
+  });
+});

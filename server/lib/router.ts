@@ -38,6 +38,14 @@ import {
   type PlanLang,
   type SuggestedTask,
 } from './maintenance-plan.ts';
+import {
+  createMeetup,
+  deleteMeetup,
+  findMeetup,
+  listMeetups,
+  setAttendance,
+  validateMeetup,
+} from './meetups.ts';
 import { isConfigured as isScanConfigured, scanReceipt } from './receipt-scan.ts';
 import {
   USERNAME,
@@ -297,6 +305,9 @@ export async function handleRequest(
 
     case 'social':
       return handleSocial(res, method, userId, segments.slice(1), url.searchParams, body);
+
+    case 'meetups':
+      return handleMeetups(res, method, userId, id, action, body);
 
     default:
       notFound(res);
@@ -970,6 +981,55 @@ async function handleSocial(
     default:
       notFound(res);
   }
+}
+
+/**
+ * Planes en el mapa (ver meetups.ts):
+ *   GET/POST    /api/meetups            los que no han pasado / crear uno
+ *   GET/DELETE  /api/meetups/:id        verlo / borrarlo (solo quien lo creó)
+ *   POST/DELETE /api/meetups/:id/join   apuntarse / desapuntarse
+ */
+async function handleMeetups(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  id: string | undefined,
+  action: string | undefined,
+  body: unknown
+): Promise<void> {
+  if (!id) {
+    if (method === 'GET') {
+      json(res, 200, { meetups: await listMeetups(userId) });
+      return;
+    }
+    if (method !== 'POST') return methodNotAllowed(res, ['GET', 'POST']);
+    const parsed = validateMeetup(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    json(res, 201, { meetup: await createMeetup(userId, parsed.value) });
+    return;
+  }
+
+  if (action === 'join') {
+    if (method !== 'POST' && method !== 'DELETE') return methodNotAllowed(res, ['POST', 'DELETE']);
+    const meetup = await setAttendance(userId, id, method === 'POST');
+    if (!meetup) return notFound(res);
+    json(res, 200, { meetup });
+    return;
+  }
+  if (action) return notFound(res);
+
+  if (method === 'GET') {
+    const meetup = await findMeetup(userId, id);
+    if (!meetup) return notFound(res);
+    json(res, 200, { meetup });
+    return;
+  }
+  if (method === 'DELETE') {
+    if (!(await deleteMeetup(userId, id))) return notFound(res);
+    json(res, 200, { deleted: id });
+    return;
+  }
+  methodNotAllowed(res, ['GET', 'DELETE']);
 }
 
 /**
