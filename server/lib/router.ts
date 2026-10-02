@@ -38,24 +38,48 @@ import {
   type PlanLang,
   type SuggestedTask,
 } from './maintenance-plan.ts';
+import { isConfigured as isScanConfigured, scanReceipt } from './receipt-scan.ts';
 import {
+  accessVehicle,
+  addMember,
   deleteUser,
   findById,
+  findChild,
   adminStats,
   findAiPlan,
   findIllustration,
+  findUserByEmail,
   findUserById,
   getPool,
+  listMembers,
   loadSnapshot,
   remove,
+  removeById,
+  removeMember,
   removeVehicleCascade,
   recordUsage,
   saveAiPlan,
   saveIllustration,
   upsert,
 } from './store.ts';
-import type { StoredPlan, StoredRecord, StoredVehicle } from './types.ts';
-import { validatePlan, validateRecord, validateVehicle } from './validate.ts';
+import type {
+  DocumentKind,
+  MemberRole,
+  StoredDocument,
+  StoredFuel,
+  StoredPlan,
+  StoredRecord,
+  StoredVehicle,
+  StoredWorkshop,
+} from './types.ts';
+import {
+  validateDocument,
+  validateFuel,
+  validatePlan,
+  validateRecord,
+  validateVehicle,
+  validateWorkshop,
+} from './validate.ts';
 
 export async function handleRequest(
   req: IncomingMessage,
@@ -216,14 +240,19 @@ export async function handleRequest(
   }
 
   const segments = path.split('/').filter(Boolean).slice(1);
-  const [resource, id, action] = segments;
+  const [resource, id, action, extra] = segments;
 
   switch (resource) {
     case 'garage': {
       if (method !== 'GET') return methodNotAllowed(res, ['GET']);
 
       const snapshot = await loadSnapshot(userId);
-      json(res, 200, { ...snapshot, vehicles: snapshot.vehicles.map(forClient) });
+      json(res, 200, {
+        ...snapshot,
+        vehicles: snapshot.vehicles.map(forClient),
+        records: snapshot.records.map((r) => withPhotoLink(r, 'records')),
+        documents: snapshot.documents.map((d) => withPhotoLink(d, 'documents')),
+      });
       return;
     }
 
@@ -235,13 +264,23 @@ export async function handleRequest(
       return;
 
     case 'vehicles':
-      return handleVehicles(res, method, userId, id, action, body);
+      return handleVehicles(res, method, userId, id, action, extra, body);
 
     case 'records':
-      return handleRecords(res, method, userId, id, body);
+      if (id === 'scan') return handleScan(res, method, userId, body);
+      return handleRecords(res, method, userId, id, action, body);
 
     case 'plans':
       return handlePlans(res, method, userId, id, body);
+
+    case 'documents':
+      return handleDocuments(res, method, userId, id, action, body);
+
+    case 'fuel':
+      return handleFuel(res, method, userId, id, body);
+
+    case 'workshops':
+      return handleWorkshops(res, method, userId, id, body);
 
     default:
       notFound(res);
@@ -254,6 +293,7 @@ async function handleVehicles(
   userId: string,
   id: string | undefined,
   action: string | undefined,
+  extra: string | undefined,
   body: unknown
 ): Promise<void> {
   if (!id) {
@@ -276,8 +316,14 @@ async function handleVehicles(
     return;
   }
 
-  const existing = await findById<StoredVehicle>('vehicles', userId, id);
-  if (!existing) return notFound(res);
+  // El dueño y aquellos con quien lo comparte ven y editan el coche; solo el
+  // dueño lo borra o decide con quién compartirlo.
+  const access = await accessVehicle(userId, id);
+  if (!access) return notFound(res);
+  const { vehicle: existing, role } = access;
+  const ownerId = existing.userId;
+
+  if (action === 'members') return handleMembers(res, method, userId, existing, role, extra, body);
 
   if (action === 'maintenance-plan') {
     if (method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -352,7 +398,7 @@ async function handleVehicles(
       illustrationAt: new Date().toISOString(),
       illustrationVersion: ILLUSTRATION_VERSION,
     };
-    await upsert('vehicles', userId, id, updated);
+    await upsert('vehicles', ownerId, id, updated);
     json(res, 200, forClient(updated));
     return;
   }
@@ -396,7 +442,7 @@ async function handleVehicles(
           : existing.mileageUpdatedAt,
     };
 
-    await upsert('vehicles', userId, id, updated);
+    await upsert('vehicles', ownerId, id, updated);
 
     // Si se concretó la generación o la carrocería, la misma ilustración vale
     // también para quien busque el coche así descrito.
@@ -411,6 +457,10 @@ async function handleVehicles(
   }
 
   if (method === 'DELETE') {
+    if (role !== 'owner') {
+      json(res, 403, { error: 'Only the owner can delete the vehicle' });
+      return;
+    }
     await removeVehicleCascade(userId, id);
     json(res, 200, { deleted: id });
     return;
@@ -419,11 +469,104 @@ async function handleVehicles(
   methodNotAllowed(res, ['GET', 'PUT', 'DELETE']);
 }
 
+/**
+ * Con quién se comparte un coche. Lo ven todos los que lo comparten; solo el
+ * dueño invita o quita a alguien, y cada uno puede dejar de compartirlo.
+ */
+async function handleMembers(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  vehicle: StoredVehicle,
+  role: MemberRole,
+  memberId: string | undefined,
+  body: unknown
+): Promise<void> {
+  if (!memberId && method === 'GET') {
+    json(res, 200, { members: await listMembers(vehicle) });
+    return;
+  }
+
+  if (!memberId && method === 'POST') {
+    if (role !== 'owner') {
+      json(res, 403, { error: 'Only the owner can share the vehicle' });
+      return;
+    }
+    const email = (body as { email?: unknown } | null)?.email;
+    if (typeof email !== 'string' || !email.trim()) return badRequest(res, ['Invalid email address']);
+
+    const invited = await findUserByEmail(email.trim());
+    if (!invited) {
+      json(res, 404, { error: 'There is no account with that email' });
+      return;
+    }
+    if (invited.id === vehicle.userId) return badRequest(res, ['That account already owns the vehicle']);
+
+    await addMember(vehicle.id, invited.id);
+    json(res, 201, { members: await listMembers(vehicle) });
+    return;
+  }
+
+  if (memberId && method === 'DELETE') {
+    if (role !== 'owner' && memberId !== userId) {
+      json(res, 403, { error: 'Only the owner can remove someone' });
+      return;
+    }
+    const removed = await removeMember(vehicle.id, memberId);
+    if (!removed) return notFound(res);
+    json(res, 200, { members: await listMembers(vehicle) });
+    return;
+  }
+
+  methodNotAllowed(res, memberId ? ['DELETE'] : ['GET', 'POST']);
+}
+
+/** Lee un ticket con la IA; no guarda nada: el usuario revisa y luego guarda. */
+async function handleScan(res: ServerResponse, method: string, userId: string, body: unknown): Promise<void> {
+  if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+
+  const { image, lang } = (body ?? {}) as { image?: unknown; lang?: unknown };
+  const errors: string[] = [];
+  const photo = typeof image === 'string' ? image : '';
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) {
+    errors.push('The photo format is not supported');
+  }
+  if (errors.length) return badRequest(res, errors);
+  if (!isScanConfigured()) {
+    json(res, 503, { error: 'Receipt scanning is not configured' });
+    return;
+  }
+
+  const scanned = await scanReceipt(photo, lang === 'es' ? 'es' : 'en');
+  await recordUsage({
+    userId,
+    service: 'gemini-scan',
+    outcome: scanned ? 'ok' : 'error',
+    costUsd: scanned?.costUsd ?? 0,
+  });
+  if (!scanned) {
+    json(res, 502, { error: 'The receipt could not be read' });
+    return;
+  }
+  json(res, 200, { receipt: scanned.receipt });
+}
+
+/** Sube los kilómetros del coche si lo apuntado es más reciente. */
+async function raiseOdometer(vehicle: StoredVehicle, mileage: number, date: string): Promise<void> {
+  if (mileage <= vehicle.mileage) return;
+  await upsert('vehicles', vehicle.userId, vehicle.id, {
+    ...vehicle,
+    mileage,
+    mileageUpdatedAt: date,
+  });
+}
+
 async function handleRecords(
   res: ServerResponse,
   method: string,
   userId: string,
   id: string | undefined,
+  action: string | undefined,
   body: unknown
 ): Promise<void> {
   if (!id) {
@@ -432,49 +575,52 @@ async function handleRecords(
     const parsed = validateRecord(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
 
-    const vehicle = await findById<StoredVehicle>('vehicles', userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ['The vehicle does not exist']);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ['The vehicle does not exist']);
+    const { vehicle } = access;
 
     const record: StoredRecord = {
       ...parsed.value,
       id: newId(),
-      userId,
+      userId: vehicle.userId,
+      createdBy: userId !== vehicle.userId ? userId : undefined,
       createdAt: new Date().toISOString(),
     };
 
-    await upsert('records', userId, record.id, record, record.vehicleId);
-
-    if (record.mileage > vehicle.mileage) {
-      await upsert('vehicles', userId, vehicle.id, {
-        ...vehicle,
-        mileage: record.mileage,
-        mileageUpdatedAt: record.date,
-      });
-    }
+    await upsert('records', vehicle.userId, record.id, record, record.vehicleId);
+    await raiseOdometer(vehicle, record.mileage, record.date);
 
     if (record.planId) {
-      const plan = await findById<StoredPlan>('plans', userId, record.planId);
-      if (plan) {
-        await upsert('plans', userId, plan.id, {
-          ...plan,
+      const found = await findChild<StoredPlan>('plans', userId, record.planId);
+      if (found && found.item.vehicleId === vehicle.id) {
+        await upsert('plans', vehicle.userId, found.item.id, {
+          ...found.item,
           lastServiceMileage: record.mileage,
           lastServiceDate: record.date,
-        }, plan.vehicleId);
+        }, vehicle.id);
       }
     }
 
-    json(res, 201, record);
+    json(res, 201, withPhotoLink(record, 'records'));
     return;
   }
 
+  const found = await findChild<StoredRecord>('records', userId, id);
+  if (!found) return notFound(res);
+
+  if (action === 'photo') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    return sendDataUrl(res, found.item.photo);
+  }
+  if (action) return notFound(res);
+
   if (method === 'DELETE') {
-    const deleted = await remove('records', userId, id);
-    if (!deleted) return notFound(res);
+    await removeById('records', id);
     json(res, 200, { deleted: id });
     return;
   }
 
-  methodNotAllowed(res, ['POST', 'DELETE']);
+  methodNotAllowed(res, ['DELETE']);
 }
 
 async function handlePlans(
@@ -490,41 +636,224 @@ async function handlePlans(
     const parsed = validatePlan(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
 
-    const vehicle = await findById<StoredVehicle>('vehicles', userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ['The vehicle does not exist']);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ['The vehicle does not exist']);
 
     const plan: StoredPlan = {
       ...parsed.value,
       id: newId(),
-      userId,
+      userId: access.vehicle.userId,
       createdAt: new Date().toISOString(),
     };
 
-    await upsert('plans', userId, plan.id, plan, plan.vehicleId);
+    await upsert('plans', plan.userId, plan.id, plan, plan.vehicleId);
     json(res, 201, plan);
     return;
   }
 
-  const existing = await findById<StoredPlan>('plans', userId, id);
-  if (!existing) return notFound(res);
+  const found = await findChild<StoredPlan>('plans', userId, id);
+  if (!found) return notFound(res);
+  const existing = found.item;
 
   if (method === 'PUT') {
     const parsed = validatePlan(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
+    // Una tarea no se cambia de coche.
+    if (parsed.value.vehicleId !== existing.vehicleId) return badRequest(res, ['The vehicle does not exist']);
 
     const updated: StoredPlan = { ...existing, ...parsed.value };
-    await upsert('plans', userId, id, updated, updated.vehicleId);
+    await upsert('plans', existing.userId, id, updated, updated.vehicleId);
     json(res, 200, updated);
     return;
   }
 
   if (method === 'DELETE') {
-    await remove('plans', userId, id);
+    await removeById('plans', id);
     json(res, 200, { deleted: id });
     return;
   }
 
   methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+async function handleDocuments(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  id: string | undefined,
+  action: string | undefined,
+  body: unknown
+): Promise<void> {
+  if (!id) {
+    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+
+    const parsed = validateDocument(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ['The vehicle does not exist']);
+
+    const document: StoredDocument = {
+      ...parsed.value,
+      kind: parsed.value.kind as DocumentKind,
+      id: newId(),
+      userId: access.vehicle.userId,
+      createdAt: new Date().toISOString(),
+    };
+
+    await upsert('documents', document.userId, document.id, document, document.vehicleId);
+    json(res, 201, withPhotoLink(document, 'documents'));
+    return;
+  }
+
+  const found = await findChild<StoredDocument>('documents', userId, id);
+  if (!found) return notFound(res);
+  const existing = found.item;
+
+  if (action === 'photo') {
+    if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+    return sendDataUrl(res, existing.photo);
+  }
+  if (action) return notFound(res);
+
+  if (method === 'PUT') {
+    const parsed = validateDocument(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    if (parsed.value.vehicleId !== existing.vehicleId) return badRequest(res, ['The vehicle does not exist']);
+
+    // La foto no viaja de vuelta en cada edición: si no llega, se conserva.
+    const keepPhoto = (body as { keepPhoto?: unknown } | null)?.keepPhoto === true;
+    const updated: StoredDocument = {
+      ...existing,
+      ...parsed.value,
+      kind: parsed.value.kind as DocumentKind,
+      photo: parsed.value.photo ?? (keepPhoto ? existing.photo : undefined),
+    };
+    await upsert('documents', existing.userId, id, updated, updated.vehicleId);
+    json(res, 200, withPhotoLink(updated, 'documents'));
+    return;
+  }
+
+  if (method === 'DELETE') {
+    await removeById('documents', id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+
+  methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+async function handleFuel(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  id: string | undefined,
+  body: unknown
+): Promise<void> {
+  if (!id) {
+    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+
+    const parsed = validateFuel(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ['The vehicle does not exist']);
+    const { vehicle } = access;
+
+    const fuel: StoredFuel = {
+      ...parsed.value,
+      id: newId(),
+      userId: vehicle.userId,
+      createdBy: userId !== vehicle.userId ? userId : undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    await upsert('fuel_logs', vehicle.userId, fuel.id, fuel, fuel.vehicleId);
+    await raiseOdometer(vehicle, fuel.mileage, fuel.date);
+    json(res, 201, fuel);
+    return;
+  }
+
+  const found = await findChild<StoredFuel>('fuel_logs', userId, id);
+  if (!found) return notFound(res);
+
+  if (method === 'DELETE') {
+    await removeById('fuel_logs', id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+
+  methodNotAllowed(res, ['DELETE']);
+}
+
+/** Los talleres son de cada persona: no se comparten con el coche. */
+async function handleWorkshops(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  id: string | undefined,
+  body: unknown
+): Promise<void> {
+  if (!id) {
+    if (method !== 'POST') return methodNotAllowed(res, ['POST']);
+
+    const parsed = validateWorkshop(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+
+    const workshop: StoredWorkshop = {
+      ...parsed.value,
+      id: newId(),
+      userId,
+      createdAt: new Date().toISOString(),
+    };
+    await upsert('workshops', userId, workshop.id, workshop);
+    json(res, 201, workshop);
+    return;
+  }
+
+  const existing = await findById<StoredWorkshop>('workshops', userId, id);
+  if (!existing) return notFound(res);
+
+  if (method === 'PUT') {
+    const parsed = validateWorkshop(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+
+    const updated: StoredWorkshop = { ...existing, ...parsed.value };
+    await upsert('workshops', userId, id, updated);
+    json(res, 200, updated);
+    return;
+  }
+
+  if (method === 'DELETE') {
+    await remove('workshops', userId, id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+
+  methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+/**
+ * Las fotos de tickets y documentos, como las ilustraciones, no van dentro
+ * del JSON del garaje: viajan como enlace y se descargan aparte.
+ */
+function withPhotoLink<T extends { id: string; photo?: string; createdAt: string }>(
+  item: T,
+  kind: 'records' | 'documents'
+): T {
+  if (!item.photo) return item;
+  return { ...item, photo: `/api/${kind}/${item.id}/photo?v=${item.photo.length}` };
+}
+
+/** Sirve una imagen guardada como data URL. */
+function sendDataUrl(res: ServerResponse, dataUrl: string | undefined): void {
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(dataUrl ?? '');
+  if (!match) return notFound(res);
+
+  res.statusCode = 200;
+  res.setHeader('Content-Type', match[1]);
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.end(Buffer.from(match[2], 'base64'));
 }
 
 /**

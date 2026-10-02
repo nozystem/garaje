@@ -553,3 +553,225 @@ describe('admin stats', () => {
     expect(res.status).toBe(403);
   });
 });
+
+const PHOTO = 'data:image/jpeg;base64,' + Buffer.from('a tiny receipt').toString('base64');
+
+async function withCar(c: ReturnType<typeof client>) {
+  const res = await c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) });
+  return (await res.json()) as { id: string; mileage: number };
+}
+
+describe('shared vehicles', () => {
+  async function ownerAndGuest() {
+    const owner = client();
+    await owner.register('owner@example.com');
+    const guest = client();
+    await guest.register('guest@example.com');
+    const car = await withCar(owner);
+    return { owner, guest, car };
+  }
+
+  it('the owner shares a vehicle by email and the guest sees it in their garage', async () => {
+    const { owner, guest, car } = await ownerAndGuest();
+
+    const shared = await owner.fetch(`/api/vehicles/${car.id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'GUEST@example.com' }),
+    });
+    expect(shared.status).toBe(201);
+    const { members } = await shared.json();
+    expect(members.map((m: { email: string; role: string }) => [m.email, m.role])).toEqual([
+      ['owner@example.com', 'owner'],
+      ['guest@example.com', 'member'],
+    ]);
+
+    const garage = await (await guest.fetch('/api/garage')).json();
+    expect(garage.vehicles).toHaveLength(1);
+    expect(garage.vehicles[0].sharedBy).toEqual({ ownerName: 'Ana', ownerEmail: 'owner@example.com' });
+  });
+
+  it('answers 404 when there is no account with that email', async () => {
+    const { owner, car } = await ownerAndGuest();
+    const res = await owner.fetch(`/api/vehicles/${car.id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'nobody@example.com' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('a guest logs records that stay with the vehicle, but cannot delete it or share it', async () => {
+    const { owner, guest, car } = await ownerAndGuest();
+    await owner.fetch(`/api/vehicles/${car.id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'guest@example.com' }),
+    });
+
+    const record = await guest.fetch('/api/records', {
+      method: 'POST',
+      body: JSON.stringify({
+        vehicleId: car.id, category: 'oil', title: 'Oil', date: '2026-05-01', mileage: 101_000,
+      }),
+    });
+    expect(record.status).toBe(201);
+
+    const ownerGarage = await (await owner.fetch('/api/garage')).json();
+    expect(ownerGarage.records).toHaveLength(1);
+    expect(ownerGarage.vehicles[0].mileage).toBe(101_000);
+
+    expect((await guest.fetch(`/api/vehicles/${car.id}`, { method: 'DELETE' })).status).toBe(403);
+    expect(
+      (await guest.fetch(`/api/vehicles/${car.id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email: 'owner@example.com' }),
+      })).status
+    ).toBe(403);
+
+    // Si el invitado se va, lo que apuntó se queda con el coche.
+    const me = await (await guest.fetch('/api/auth/me')).json();
+    expect((await guest.fetch(`/api/vehicles/${car.id}/members/${me.user.id}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await (await guest.fetch('/api/garage')).json()).vehicles).toHaveLength(0);
+    expect((await (await owner.fetch('/api/garage')).json()).records).toHaveLength(1);
+  });
+
+  it('someone the vehicle is not shared with sees nothing of it', async () => {
+    const { guest, car } = await ownerAndGuest();
+    expect((await guest.fetch(`/api/vehicles/${car.id}`)).status).toBe(404);
+    expect((await guest.fetch(`/api/vehicles/${car.id}/members`)).status).toBe(404);
+    const res = await guest.fetch('/api/fuel', {
+      method: 'POST',
+      body: JSON.stringify({ vehicleId: car.id, date: '2026-05-01', mileage: 1, liters: 40, cost: 60 }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('documents', () => {
+  it('creates, updates and deletes a document, serving its photo apart', async () => {
+    const c = client();
+    await c.register();
+    const car = await withCar(c);
+
+    const created = await c.fetch('/api/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        vehicleId: car.id, kind: 'insurance', title: 'Seguro', provider: 'Mapfre',
+        expiresAt: '2027-01-31', cost: 320, photo: PHOTO,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const doc = await created.json();
+    expect(doc.photo).toMatch(new RegExp(`^/api/documents/${doc.id}/photo`));
+
+    const photo = await c.fetch(`/api/documents/${doc.id}/photo`);
+    expect(photo.headers.get('content-type')).toBe('image/jpeg');
+    expect(Buffer.from(await photo.arrayBuffer()).toString()).toBe('a tiny receipt');
+
+    const updated = await c.fetch(`/api/documents/${doc.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ vehicleId: car.id, kind: 'insurance', title: 'Seguro a todo riesgo', keepPhoto: true }),
+    });
+    expect((await updated.json()).photo).toBeTruthy();
+
+    const garage = await (await c.fetch('/api/garage')).json();
+    expect(garage.documents.map((d: { title: string }) => d.title)).toEqual(['Seguro a todo riesgo']);
+
+    expect((await c.fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })).status).toBe(200);
+  });
+
+  it('rejects an unknown kind of document', async () => {
+    const c = client();
+    await c.register();
+    const car = await withCar(c);
+    const res = await c.fetch('/api/documents', {
+      method: 'POST',
+      body: JSON.stringify({ vehicleId: car.id, kind: 'passport', title: 'X' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('fuel', () => {
+  it('logs a refuel and raises the odometer', async () => {
+    const c = client();
+    await c.register();
+    const car = await withCar(c);
+
+    const res = await c.fetch('/api/fuel', {
+      method: 'POST',
+      body: JSON.stringify({ vehicleId: car.id, date: '2026-05-01', mileage: 100_650, liters: 42.5, cost: 66.3 }),
+    });
+    expect(res.status).toBe(201);
+    expect((await res.json()).fullTank).toBe(true);
+
+    const garage = await (await c.fetch('/api/garage')).json();
+    expect(garage.fuel).toHaveLength(1);
+    expect(garage.vehicles[0].mileage).toBe(100_650);
+  });
+});
+
+describe('workshops', () => {
+  it('belong to each account', async () => {
+    const a = client();
+    await a.register('a@example.com');
+    const b = client();
+    await b.register('b@example.com');
+
+    const res = await a.fetch('/api/workshops', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Talleres Pepe', phone: '+34 600 000 000' }),
+    });
+    expect(res.status).toBe(201);
+    const workshop = await res.json();
+
+    expect((await (await a.fetch('/api/garage')).json()).workshops).toHaveLength(1);
+    expect((await (await b.fetch('/api/garage')).json()).workshops).toHaveLength(0);
+    expect((await b.fetch(`/api/workshops/${workshop.id}`, { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('rejects a phone that is not a phone', async () => {
+    const c = client();
+    await c.register();
+    const res = await c.fetch('/api/workshops', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'X', phone: 'call me' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('records with receipts', () => {
+  it('keeps the parts and serves the receipt photo apart', async () => {
+    const c = client();
+    await c.register();
+    const car = await withCar(c);
+
+    const res = await c.fetch('/api/records', {
+      method: 'POST',
+      body: JSON.stringify({
+        vehicleId: car.id, category: 'brakes', title: 'Pads', date: '2026-05-01',
+        mileage: 100_000, parts: 'Front pads', photo: PHOTO,
+      }),
+    });
+    const record = await res.json();
+    expect(record.parts).toBe('Front pads');
+    expect(record.photo).toMatch(/^\/api\/records\/.+\/photo/);
+
+    const photo = await c.fetch(record.photo);
+    expect(photo.status).toBe(200);
+  });
+
+  it('answers 503 to a scan when the AI is not configured', async () => {
+    const c = client();
+    await c.register();
+    delete process.env['GEMINI_API_KEY'];
+    const res = await c.fetch('/api/records/scan', { method: 'POST', body: JSON.stringify({ image: PHOTO }) });
+    expect(res.status).toBe(503);
+  });
+
+  it('rejects a scan of something that is not an image', async () => {
+    const c = client();
+    await c.register();
+    const res = await c.fetch('/api/records/scan', { method: 'POST', body: JSON.stringify({ image: 'hello' }) });
+    expect(res.status).toBe(400);
+  });
+});

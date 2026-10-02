@@ -216,7 +216,46 @@ async function ensureSchema(p) {
       cost_usd NUMERIC(10, 5) NOT NULL DEFAULT 0
     );
 
+    -- Seguro, ITV y dem\xE1s papeles de cada coche.
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fuel_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    -- Talleres de confianza: son de la persona, no de un coche.
+    CREATE TABLE IF NOT EXISTS workshops (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    -- Con qui\xE9n comparte cada coche su due\xF1o. El due\xF1o no tiene fila: es el
+    -- user_id del coche. Todo lo del coche (registros, tareas, repostajes\u2026)
+    -- se guarda con el user_id del due\xF1o, aunque lo apunte otro: as\xED, si
+    -- alguien deja de compartirlo o borra su cuenta, el historial sigue ah\xED.
+    CREATE TABLE IF NOT EXISTS vehicle_members (
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (vehicle_id, user_id)
+    );
+
     CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
+    CREATE INDEX IF NOT EXISTS vehicle_members_user ON vehicle_members (user_id);
+    CREATE INDEX IF NOT EXISTS records_vehicle ON records (vehicle_id);
+    CREATE INDEX IF NOT EXISTS plans_vehicle ON plans (vehicle_id);
+    CREATE INDEX IF NOT EXISTS documents_vehicle ON documents (vehicle_id);
+    CREATE INDEX IF NOT EXISTS fuel_logs_vehicle ON fuel_logs (vehicle_id);
+    CREATE INDEX IF NOT EXISTS workshops_user ON workshops (user_id);
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
@@ -371,16 +410,95 @@ function toUser(row) {
 }
 async function loadSnapshot(userId) {
   const p = await getPool();
-  const [vehicles, records, plans] = await Promise.all([
-    p.query("SELECT data FROM vehicles WHERE user_id = $1", [userId]),
-    p.query("SELECT data FROM records WHERE user_id = $1", [userId]),
-    p.query("SELECT data FROM plans WHERE user_id = $1", [userId])
+  const vehicles = await p.query(
+    `SELECT v.data, v.user_id, o.name AS owner_name, o.email AS owner_email
+     FROM vehicles v JOIN users o ON o.id = v.user_id
+     WHERE v.user_id = $1
+        OR v.id IN (SELECT vehicle_id FROM vehicle_members WHERE user_id = $1)`,
+    [userId]
+  );
+  const ids = vehicles.rows.map((r) => r["data"].id);
+  const children = (table) => p.query(`SELECT data FROM ${table} WHERE vehicle_id = ANY($1::text[])`, [ids]);
+  const [records, plans, documents, fuel, workshops] = await Promise.all([
+    children("records"),
+    children("plans"),
+    children("documents"),
+    children("fuel_logs"),
+    p.query("SELECT data FROM workshops WHERE user_id = $1", [userId])
   ]);
   return {
-    vehicles: vehicles.rows.map((r) => r["data"]),
+    vehicles: vehicles.rows.map((r) => {
+      const vehicle = r["data"];
+      if (r["user_id"] === userId) return vehicle;
+      const sharedBy = { ownerName: r["owner_name"], ownerEmail: r["owner_email"] };
+      return { ...vehicle, sharedBy };
+    }),
     records: records.rows.map((r) => r["data"]),
-    plans: plans.rows.map((r) => r["data"])
+    plans: plans.rows.map((r) => r["data"]),
+    documents: documents.rows.map((r) => r["data"]),
+    fuel: fuel.rows.map((r) => r["data"]),
+    workshops: workshops.rows.map((r) => r["data"])
   };
+}
+async function accessVehicle(userId, vehicleId) {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT v.data, v.user_id FROM vehicles v
+     WHERE v.id = $1
+       AND (v.user_id = $2
+            OR EXISTS (SELECT 1 FROM vehicle_members m WHERE m.vehicle_id = v.id AND m.user_id = $2))`,
+    [vehicleId, userId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return { vehicle: row["data"], role: row["user_id"] === userId ? "owner" : "member" };
+}
+async function findChild(table, userId, id) {
+  const p = await getPool();
+  const result = await p.query(`SELECT data FROM ${table} WHERE id = $1`, [id]);
+  const item = result.rows[0]?.["data"];
+  if (!item) return null;
+  const access = await accessVehicle(userId, item.vehicleId);
+  return access ? { item, ...access } : null;
+}
+async function removeById(table, id) {
+  const p = await getPool();
+  const result = await p.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+async function listMembers(vehicle) {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT u.id, u.name, u.email, 'owner' AS role, 0 AS ord, NULL::timestamptz AS since
+     FROM users u WHERE u.id = $1
+     UNION ALL
+     SELECT u.id, u.name, u.email, 'member', 1, m.created_at
+     FROM vehicle_members m JOIN users u ON u.id = m.user_id
+     WHERE m.vehicle_id = $2
+     ORDER BY ord, since`,
+    [vehicle.userId, vehicle.id]
+  );
+  return result.rows.map((r) => ({
+    userId: r["id"],
+    name: r["name"],
+    email: r["email"],
+    role: r["role"]
+  }));
+}
+async function addMember(vehicleId, userId) {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO vehicle_members (vehicle_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [vehicleId, userId]
+  );
+}
+async function removeMember(vehicleId, userId) {
+  const p = await getPool();
+  const result = await p.query(
+    "DELETE FROM vehicle_members WHERE vehicle_id = $1 AND user_id = $2",
+    [vehicleId, userId]
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 async function findById(table, userId, id) {
   const p = await getPool();
@@ -392,9 +510,9 @@ async function findById(table, userId, id) {
 }
 async function upsert(table, userId, id, data, vehicleId) {
   const p = await getPool();
-  if (table === "vehicles") {
+  if (table === "vehicles" || table === "workshops") {
     await p.query(
-      `INSERT INTO vehicles (id, user_id, data) VALUES ($1, $2, $3)
+      `INSERT INTO ${table} (id, user_id, data) VALUES ($1, $2, $3)
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
       [id, userId, JSON.stringify(data)]
     );
@@ -917,10 +1035,116 @@ async function suggestPlan(q, lang) {
   }
 }
 
+// server/lib/receipt-scan.ts
+var MODEL3 = "gemini-3.8-flash";
+var REQUEST_TIMEOUT_MS4 = 6e4;
+var USD_PER_M_INPUT2 = 0.75;
+var USD_PER_M_OUTPUT2 = 3.75;
+var CATEGORIES2 = [
+  "oil",
+  "filters",
+  "brakes",
+  "tires",
+  "battery",
+  "coolant",
+  "timing-belt",
+  "inspection",
+  "insurance",
+  "other"
+];
+var SCHEMA2 = {
+  type: "object",
+  properties: {
+    title: { type: ["string", "null"] },
+    category: { type: "string", enum: CATEGORIES2 },
+    date: { type: ["string", "null"] },
+    mileage: { type: ["integer", "null"] },
+    cost: { type: ["number", "null"] },
+    workshop: { type: ["string", "null"] },
+    parts: { type: ["string", "null"] }
+  },
+  required: ["title", "category", "date", "mileage", "cost", "workshop", "parts"]
+};
+var LANGUAGE_NAMES2 = { en: "English", es: "Spanish" };
+function isConfigured4() {
+  return Boolean(process.env["GEMINI_API_KEY"]);
+}
+function promptFor3(lang) {
+  return [
+    "This is a photo of a receipt or invoice from a car workshop, a tyre shop or an ITV station.",
+    "Extract what is needed to log the maintenance in a car maintenance app:",
+    `- title: what was done, in at most 6 words, in ${LANGUAGE_NAMES2[lang]} (e.g. "Oil and filter change");`,
+    "- category: the one that best fits the main job;",
+    "- date: the date of the service as YYYY-MM-DD;",
+    "- mileage: the odometer reading in km written on it, if any;",
+    "- cost: the total paid, taxes included, as a number;",
+    "- workshop: the name of the business;",
+    `- parts: the parts and fluids replaced, comma separated, with references if printed, in ${LANGUAGE_NAMES2[lang]}.`,
+    "Use null for anything that is not on the document. Do not guess."
+  ].join("\n");
+}
+function sanitizeReceipt(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const text = (value, max) => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+  const number = (value, max) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
+  const date = typeof r["date"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r["date"]) && !Number.isNaN(new Date(r["date"]).getTime()) ? r["date"] : null;
+  return {
+    title: text(r["title"], 120),
+    category: CATEGORIES2.includes(r["category"]) ? r["category"] : "other",
+    date,
+    mileage: number(r["mileage"], 3e6) === null ? null : Math.round(r["mileage"]),
+    cost: number(r["cost"], 1e6),
+    workshop: text(r["workshop"], 80),
+    parts: text(r["parts"], 500)
+  };
+}
+function findJson2(node) {
+  if (typeof node === "string") return node.trim().startsWith("{") ? node : null;
+  if (!node || typeof node !== "object") return null;
+  for (const value of Object.values(node)) {
+    const found = findJson2(value);
+    if (found) return found;
+  }
+  return null;
+}
+async function scanReceipt(image, lang) {
+  const apiKey = process.env["GEMINI_API_KEY"];
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(image);
+  if (!apiKey || !match) return null;
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL3,
+        input: [
+          { type: "text", text: promptFor3(lang) },
+          { type: "image", data: match[2], mime_type: match[1] }
+        ],
+        response_format: { type: "text", mime_type: "application/json", schema: SCHEMA2 }
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS4)
+    });
+    if (!res.ok) {
+      console.error(`Gemini answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      return null;
+    }
+    const body = await res.json();
+    const json2 = findJson2(body);
+    if (!json2) return null;
+    const usage = body.usage ?? {};
+    const costUsd = ((usage.total_input_tokens ?? 0) * USD_PER_M_INPUT2 + ((usage.total_output_tokens ?? 0) + (usage.total_thought_tokens ?? 0)) * USD_PER_M_OUTPUT2) / 1e6;
+    return { receipt: sanitizeReceipt(JSON.parse(json2)), costUsd };
+  } catch (error) {
+    console.error("Gemini receipt scan failed:", error);
+    return null;
+  }
+}
+
 // server/lib/validate.ts
 var VEHICLE_TYPES = ["car", "motorcycle", "van"];
 var FUEL_TYPES = ["gasoline", "diesel", "electric", "hybrid"];
-var CATEGORIES2 = [
+var CATEGORIES3 = [
   "oil",
   "filters",
   "brakes",
@@ -1021,7 +1245,8 @@ function validateRecord(input) {
   if (!title) errors.push("Title is required");
   if (!date) errors.push("Invalid date");
   if (mileage === null) errors.push("Mileage must be a positive number");
-  if (!category || !CATEGORIES2.includes(category)) errors.push("Invalid category");
+  if (!category || !CATEGORIES3.includes(category)) errors.push("Invalid category");
+  const photo = photoOrNull(body["photo"], errors);
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -1034,6 +1259,8 @@ function validateRecord(input) {
       cost: num(body["cost"], 0, 1e6) ?? void 0,
       workshop: str(body["workshop"], 80) ?? void 0,
       notes: str(body["notes"], 1e3) ?? void 0,
+      parts: str(body["parts"], 500) ?? void 0,
+      photo: photo ?? void 0,
       planId: str(body["planId"], 64) ?? void 0
     }
   };
@@ -1048,7 +1275,7 @@ function validatePlan(input) {
   const intervalMonths = num(body["intervalMonths"], 1, 240);
   if (!vehicleId) errors.push("Vehicle is required");
   if (!title) errors.push("Title is required");
-  if (!category || !CATEGORIES2.includes(category)) errors.push("Invalid category");
+  if (!category || !CATEGORIES3.includes(category)) errors.push("Invalid category");
   if (intervalKm === null && intervalMonths === null) {
     errors.push("Set an interval in kilometres, in months, or both");
   }
@@ -1065,6 +1292,81 @@ function validatePlan(input) {
       lastServiceDate: isoDate(body["lastServiceDate"]) ?? void 0,
       active: body["active"] !== false,
       notes: str(body["notes"], 1e3) ?? void 0
+    }
+  };
+}
+var DOCUMENT_KINDS = ["insurance", "inspection", "registration", "tax", "warranty", "other"];
+function validateDocument(input) {
+  const body = asRecord(input);
+  const errors = [];
+  const vehicleId = str(body["vehicleId"], 64);
+  const title = str(body["title"], 120);
+  const kind = str(body["kind"], 20);
+  const expires = body["expiresAt"];
+  const expiresAt = expires === void 0 || expires === null || expires === "" ? null : isoDate(expires);
+  if (!vehicleId) errors.push("Vehicle is required");
+  if (!title) errors.push("Title is required");
+  if (!kind || !DOCUMENT_KINDS.includes(kind)) errors.push("Invalid document type");
+  if (expires && !expiresAt) errors.push("Invalid date");
+  const photo = photoOrNull(body["photo"], errors);
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      vehicleId,
+      kind,
+      title,
+      number: str(body["number"], 60) ?? void 0,
+      provider: str(body["provider"], 80) ?? void 0,
+      expiresAt: expiresAt ?? void 0,
+      cost: num(body["cost"], 0, 1e6) ?? void 0,
+      notes: str(body["notes"], 1e3) ?? void 0,
+      photo: photo ?? void 0
+    }
+  };
+}
+function validateFuel(input) {
+  const body = asRecord(input);
+  const errors = [];
+  const vehicleId = str(body["vehicleId"], 64);
+  const date = isoDate(body["date"]);
+  const mileage = num(body["mileage"], 0, 3e6);
+  const liters = num(body["liters"], 0.1, 500);
+  const cost = num(body["cost"], 0, 1e4);
+  if (!vehicleId) errors.push("Vehicle is required");
+  if (!date) errors.push("Invalid date");
+  if (mileage === null) errors.push("Mileage must be a positive number");
+  if (liters === null) errors.push("Litres must be between 0.1 and 500");
+  if (cost === null) errors.push("Cost must be a positive number");
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      vehicleId,
+      date,
+      mileage,
+      liters,
+      cost,
+      fullTank: body["fullTank"] !== false,
+      station: str(body["station"], 80) ?? void 0
+    }
+  };
+}
+function validateWorkshop(input) {
+  const body = asRecord(input);
+  const name = str(body["name"], 80);
+  const phone = body["phone"] === void 0 || body["phone"] === "" ? null : str(body["phone"], 30);
+  const errors = [];
+  if (!name) errors.push("Name is required");
+  if (phone && !/^[+0-9 ()-]{3,30}$/.test(phone)) errors.push("Invalid phone number");
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      name,
+      phone: phone ?? void 0,
+      address: str(body["address"], 160) ?? void 0,
+      notes: str(body["notes"], 500) ?? void 0
     }
   };
 }
@@ -1198,12 +1500,17 @@ async function handleRequest(req, res) {
     }
   }
   const segments = path.split("/").filter(Boolean).slice(1);
-  const [resource, id, action] = segments;
+  const [resource, id, action, extra] = segments;
   switch (resource) {
     case "garage": {
       if (method !== "GET") return methodNotAllowed(res, ["GET"]);
       const snapshot = await loadSnapshot(userId);
-      json(res, 200, { ...snapshot, vehicles: snapshot.vehicles.map(forClient) });
+      json(res, 200, {
+        ...snapshot,
+        vehicles: snapshot.vehicles.map(forClient),
+        records: snapshot.records.map((r) => withPhotoLink(r, "records")),
+        documents: snapshot.documents.map((d) => withPhotoLink(d, "documents"))
+      });
       return;
     }
     case "account":
@@ -1213,16 +1520,23 @@ async function handleRequest(req, res) {
       json(res, 200, { deleted: true });
       return;
     case "vehicles":
-      return handleVehicles(res, method, userId, id, action, body);
+      return handleVehicles(res, method, userId, id, action, extra, body);
     case "records":
-      return handleRecords(res, method, userId, id, body);
+      if (id === "scan") return handleScan(res, method, userId, body);
+      return handleRecords(res, method, userId, id, action, body);
     case "plans":
       return handlePlans(res, method, userId, id, body);
+    case "documents":
+      return handleDocuments(res, method, userId, id, action, body);
+    case "fuel":
+      return handleFuel(res, method, userId, id, body);
+    case "workshops":
+      return handleWorkshops(res, method, userId, id, body);
     default:
       notFound(res);
   }
 }
-async function handleVehicles(res, method, userId, id, action, body) {
+async function handleVehicles(res, method, userId, id, action, extra, body) {
   if (!id) {
     if (method !== "POST") return methodNotAllowed(res, ["POST"]);
     const parsed = validateVehicle(body);
@@ -1239,8 +1553,11 @@ async function handleVehicles(res, method, userId, id, action, body) {
     json(res, 201, forClient(vehicle));
     return;
   }
-  const existing = await findById("vehicles", userId, id);
-  if (!existing) return notFound(res);
+  const access = await accessVehicle(userId, id);
+  if (!access) return notFound(res);
+  const { vehicle: existing, role } = access;
+  const ownerId = existing.userId;
+  if (action === "members") return handleMembers(res, method, userId, existing, role, extra, body);
   if (action === "maintenance-plan") {
     if (method !== "POST") return methodNotAllowed(res, ["POST"]);
     const lang = body?.lang === "es" ? "es" : "en";
@@ -1303,7 +1620,7 @@ async function handleVehicles(res, method, userId, id, action, body) {
       illustrationAt: (/* @__PURE__ */ new Date()).toISOString(),
       illustrationVersion: ILLUSTRATION_VERSION
     };
-    await upsert("vehicles", userId, id, updated);
+    await upsert("vehicles", ownerId, id, updated);
     json(res, 200, forClient(updated));
     return;
   }
@@ -1326,7 +1643,7 @@ async function handleVehicles(res, method, userId, id, action, body) {
       illustrationVersion: looksChanged ? void 0 : existing.illustrationVersion,
       mileageUpdatedAt: parsed.value.mileage !== existing.mileage ? (/* @__PURE__ */ new Date()).toISOString() : existing.mileageUpdatedAt
     };
-    await upsert("vehicles", userId, id, updated);
+    await upsert("vehicles", ownerId, id, updated);
     const keyChanged = illustrationKey(existing) !== illustrationKey(updated);
     if (!looksChanged && keyChanged && updated.illustration && (updated.illustrationVersion ?? 0) >= ILLUSTRATION_VERSION) {
       await saveIllustration(illustrationKey(updated), updated.illustration);
@@ -1335,87 +1652,284 @@ async function handleVehicles(res, method, userId, id, action, body) {
     return;
   }
   if (method === "DELETE") {
+    if (role !== "owner") {
+      json(res, 403, { error: "Only the owner can delete the vehicle" });
+      return;
+    }
     await removeVehicleCascade(userId, id);
     json(res, 200, { deleted: id });
     return;
   }
   methodNotAllowed(res, ["GET", "PUT", "DELETE"]);
 }
-async function handleRecords(res, method, userId, id, body) {
+async function handleMembers(res, method, userId, vehicle, role, memberId, body) {
+  if (!memberId && method === "GET") {
+    json(res, 200, { members: await listMembers(vehicle) });
+    return;
+  }
+  if (!memberId && method === "POST") {
+    if (role !== "owner") {
+      json(res, 403, { error: "Only the owner can share the vehicle" });
+      return;
+    }
+    const email = body?.email;
+    if (typeof email !== "string" || !email.trim()) return badRequest(res, ["Invalid email address"]);
+    const invited = await findUserByEmail(email.trim());
+    if (!invited) {
+      json(res, 404, { error: "There is no account with that email" });
+      return;
+    }
+    if (invited.id === vehicle.userId) return badRequest(res, ["That account already owns the vehicle"]);
+    await addMember(vehicle.id, invited.id);
+    json(res, 201, { members: await listMembers(vehicle) });
+    return;
+  }
+  if (memberId && method === "DELETE") {
+    if (role !== "owner" && memberId !== userId) {
+      json(res, 403, { error: "Only the owner can remove someone" });
+      return;
+    }
+    const removed = await removeMember(vehicle.id, memberId);
+    if (!removed) return notFound(res);
+    json(res, 200, { members: await listMembers(vehicle) });
+    return;
+  }
+  methodNotAllowed(res, memberId ? ["DELETE"] : ["GET", "POST"]);
+}
+async function handleScan(res, method, userId, body) {
+  if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+  const { image, lang } = body ?? {};
+  const errors = [];
+  const photo = typeof image === "string" ? image : "";
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) {
+    errors.push("The photo format is not supported");
+  }
+  if (errors.length) return badRequest(res, errors);
+  if (!isConfigured4()) {
+    json(res, 503, { error: "Receipt scanning is not configured" });
+    return;
+  }
+  const scanned = await scanReceipt(photo, lang === "es" ? "es" : "en");
+  await recordUsage({
+    userId,
+    service: "gemini-scan",
+    outcome: scanned ? "ok" : "error",
+    costUsd: scanned?.costUsd ?? 0
+  });
+  if (!scanned) {
+    json(res, 502, { error: "The receipt could not be read" });
+    return;
+  }
+  json(res, 200, { receipt: scanned.receipt });
+}
+async function raiseOdometer(vehicle, mileage, date) {
+  if (mileage <= vehicle.mileage) return;
+  await upsert("vehicles", vehicle.userId, vehicle.id, {
+    ...vehicle,
+    mileage,
+    mileageUpdatedAt: date
+  });
+}
+async function handleRecords(res, method, userId, id, action, body) {
   if (!id) {
     if (method !== "POST") return methodNotAllowed(res, ["POST"]);
     const parsed = validateRecord(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
-    const vehicle = await findById("vehicles", userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ["The vehicle does not exist"]);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ["The vehicle does not exist"]);
+    const { vehicle } = access;
     const record = {
       ...parsed.value,
       id: newId(),
-      userId,
+      userId: vehicle.userId,
+      createdBy: userId !== vehicle.userId ? userId : void 0,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await upsert("records", userId, record.id, record, record.vehicleId);
-    if (record.mileage > vehicle.mileage) {
-      await upsert("vehicles", userId, vehicle.id, {
-        ...vehicle,
-        mileage: record.mileage,
-        mileageUpdatedAt: record.date
-      });
-    }
+    await upsert("records", vehicle.userId, record.id, record, record.vehicleId);
+    await raiseOdometer(vehicle, record.mileage, record.date);
     if (record.planId) {
-      const plan = await findById("plans", userId, record.planId);
-      if (plan) {
-        await upsert("plans", userId, plan.id, {
-          ...plan,
+      const found2 = await findChild("plans", userId, record.planId);
+      if (found2 && found2.item.vehicleId === vehicle.id) {
+        await upsert("plans", vehicle.userId, found2.item.id, {
+          ...found2.item,
           lastServiceMileage: record.mileage,
           lastServiceDate: record.date
-        }, plan.vehicleId);
+        }, vehicle.id);
       }
     }
-    json(res, 201, record);
+    json(res, 201, withPhotoLink(record, "records"));
     return;
   }
+  const found = await findChild("records", userId, id);
+  if (!found) return notFound(res);
+  if (action === "photo") {
+    if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+    return sendDataUrl(res, found.item.photo);
+  }
+  if (action) return notFound(res);
   if (method === "DELETE") {
-    const deleted = await remove("records", userId, id);
-    if (!deleted) return notFound(res);
+    await removeById("records", id);
     json(res, 200, { deleted: id });
     return;
   }
-  methodNotAllowed(res, ["POST", "DELETE"]);
+  methodNotAllowed(res, ["DELETE"]);
 }
 async function handlePlans(res, method, userId, id, body) {
   if (!id) {
     if (method !== "POST") return methodNotAllowed(res, ["POST"]);
     const parsed = validatePlan(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
-    const vehicle = await findById("vehicles", userId, parsed.value.vehicleId);
-    if (!vehicle) return badRequest(res, ["The vehicle does not exist"]);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ["The vehicle does not exist"]);
     const plan = {
+      ...parsed.value,
+      id: newId(),
+      userId: access.vehicle.userId,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await upsert("plans", plan.userId, plan.id, plan, plan.vehicleId);
+    json(res, 201, plan);
+    return;
+  }
+  const found = await findChild("plans", userId, id);
+  if (!found) return notFound(res);
+  const existing = found.item;
+  if (method === "PUT") {
+    const parsed = validatePlan(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    if (parsed.value.vehicleId !== existing.vehicleId) return badRequest(res, ["The vehicle does not exist"]);
+    const updated = { ...existing, ...parsed.value };
+    await upsert("plans", existing.userId, id, updated, updated.vehicleId);
+    json(res, 200, updated);
+    return;
+  }
+  if (method === "DELETE") {
+    await removeById("plans", id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+  methodNotAllowed(res, ["PUT", "DELETE"]);
+}
+async function handleDocuments(res, method, userId, id, action, body) {
+  if (!id) {
+    if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+    const parsed = validateDocument(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ["The vehicle does not exist"]);
+    const document = {
+      ...parsed.value,
+      kind: parsed.value.kind,
+      id: newId(),
+      userId: access.vehicle.userId,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await upsert("documents", document.userId, document.id, document, document.vehicleId);
+    json(res, 201, withPhotoLink(document, "documents"));
+    return;
+  }
+  const found = await findChild("documents", userId, id);
+  if (!found) return notFound(res);
+  const existing = found.item;
+  if (action === "photo") {
+    if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+    return sendDataUrl(res, existing.photo);
+  }
+  if (action) return notFound(res);
+  if (method === "PUT") {
+    const parsed = validateDocument(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    if (parsed.value.vehicleId !== existing.vehicleId) return badRequest(res, ["The vehicle does not exist"]);
+    const keepPhoto = body?.keepPhoto === true;
+    const updated = {
+      ...existing,
+      ...parsed.value,
+      kind: parsed.value.kind,
+      photo: parsed.value.photo ?? (keepPhoto ? existing.photo : void 0)
+    };
+    await upsert("documents", existing.userId, id, updated, updated.vehicleId);
+    json(res, 200, withPhotoLink(updated, "documents"));
+    return;
+  }
+  if (method === "DELETE") {
+    await removeById("documents", id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+  methodNotAllowed(res, ["PUT", "DELETE"]);
+}
+async function handleFuel(res, method, userId, id, body) {
+  if (!id) {
+    if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+    const parsed = validateFuel(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    const access = await accessVehicle(userId, parsed.value.vehicleId);
+    if (!access) return badRequest(res, ["The vehicle does not exist"]);
+    const { vehicle } = access;
+    const fuel = {
+      ...parsed.value,
+      id: newId(),
+      userId: vehicle.userId,
+      createdBy: userId !== vehicle.userId ? userId : void 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await upsert("fuel_logs", vehicle.userId, fuel.id, fuel, fuel.vehicleId);
+    await raiseOdometer(vehicle, fuel.mileage, fuel.date);
+    json(res, 201, fuel);
+    return;
+  }
+  const found = await findChild("fuel_logs", userId, id);
+  if (!found) return notFound(res);
+  if (method === "DELETE") {
+    await removeById("fuel_logs", id);
+    json(res, 200, { deleted: id });
+    return;
+  }
+  methodNotAllowed(res, ["DELETE"]);
+}
+async function handleWorkshops(res, method, userId, id, body) {
+  if (!id) {
+    if (method !== "POST") return methodNotAllowed(res, ["POST"]);
+    const parsed = validateWorkshop(body);
+    if (!parsed.ok) return badRequest(res, parsed.errors);
+    const workshop = {
       ...parsed.value,
       id: newId(),
       userId,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await upsert("plans", userId, plan.id, plan, plan.vehicleId);
-    json(res, 201, plan);
+    await upsert("workshops", userId, workshop.id, workshop);
+    json(res, 201, workshop);
     return;
   }
-  const existing = await findById("plans", userId, id);
+  const existing = await findById("workshops", userId, id);
   if (!existing) return notFound(res);
   if (method === "PUT") {
-    const parsed = validatePlan(body);
+    const parsed = validateWorkshop(body);
     if (!parsed.ok) return badRequest(res, parsed.errors);
     const updated = { ...existing, ...parsed.value };
-    await upsert("plans", userId, id, updated, updated.vehicleId);
+    await upsert("workshops", userId, id, updated);
     json(res, 200, updated);
     return;
   }
   if (method === "DELETE") {
-    await remove("plans", userId, id);
+    await remove("workshops", userId, id);
     json(res, 200, { deleted: id });
     return;
   }
   methodNotAllowed(res, ["PUT", "DELETE"]);
+}
+function withPhotoLink(item, kind) {
+  if (!item.photo) return item;
+  return { ...item, photo: `/api/${kind}/${item.id}/photo?v=${item.photo.length}` };
+}
+function sendDataUrl(res, dataUrl) {
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(dataUrl ?? "");
+  if (!match) return notFound(res);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", match[1]);
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.end(Buffer.from(match[2], "base64"));
 }
 function forClient(vehicle) {
   if (!vehicle.illustration) return vehicle;

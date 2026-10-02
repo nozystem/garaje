@@ -129,6 +129,8 @@ export interface RecordInput {
   cost?: number;
   workshop?: string;
   notes?: string;
+  parts?: string;
+  photo?: string;
   planId?: string;
 }
 
@@ -148,6 +150,8 @@ export function validateRecord(input: unknown): Validation<RecordInput> {
   if (mileage === null) errors.push('Mileage must be a positive number');
   if (!category || !CATEGORIES.includes(category)) errors.push('Invalid category');
 
+  const photo = photoOrNull(body['photo'], errors);
+
   if (errors.length) return { ok: false, errors };
 
   return {
@@ -161,6 +165,8 @@ export function validateRecord(input: unknown): Validation<RecordInput> {
       cost: num(body['cost'], 0, 1_000_000) ?? undefined,
       workshop: str(body['workshop'], 80) ?? undefined,
       notes: str(body['notes'], 1000) ?? undefined,
+      parts: str(body['parts'], 500) ?? undefined,
+      photo: photo ?? undefined,
       planId: str(body['planId'], 64) ?? undefined,
     },
   };
@@ -210,6 +216,125 @@ export function validatePlan(input: unknown): Validation<PlanInput> {
       lastServiceDate: isoDate(body['lastServiceDate']) ?? undefined,
       active: body['active'] !== false,
       notes: str(body['notes'], 1000) ?? undefined,
+    },
+  };
+}
+
+const DOCUMENT_KINDS = ['insurance', 'inspection', 'registration', 'tax', 'warranty', 'other'];
+
+export interface DocumentInput {
+  vehicleId: string;
+  kind: string;
+  title: string;
+  number?: string;
+  provider?: string;
+  expiresAt?: string;
+  cost?: number;
+  notes?: string;
+  photo?: string;
+}
+
+export function validateDocument(input: unknown): Validation<DocumentInput> {
+  const body = asRecord(input);
+  const errors: string[] = [];
+
+  const vehicleId = str(body['vehicleId'], 64);
+  const title = str(body['title'], 120);
+  const kind = str(body['kind'], 20);
+  const expires = body['expiresAt'];
+  const expiresAt = expires === undefined || expires === null || expires === '' ? null : isoDate(expires);
+
+  if (!vehicleId) errors.push('Vehicle is required');
+  if (!title) errors.push('Title is required');
+  if (!kind || !DOCUMENT_KINDS.includes(kind)) errors.push('Invalid document type');
+  if (expires && !expiresAt) errors.push('Invalid date');
+
+  const photo = photoOrNull(body['photo'], errors);
+
+  if (errors.length) return { ok: false, errors };
+
+  return {
+    ok: true,
+    value: {
+      vehicleId: vehicleId as string,
+      kind: kind as string,
+      title: title as string,
+      number: str(body['number'], 60) ?? undefined,
+      provider: str(body['provider'], 80) ?? undefined,
+      expiresAt: expiresAt ?? undefined,
+      cost: num(body['cost'], 0, 1_000_000) ?? undefined,
+      notes: str(body['notes'], 1000) ?? undefined,
+      photo: photo ?? undefined,
+    },
+  };
+}
+
+export interface FuelInput {
+  vehicleId: string;
+  date: string;
+  mileage: number;
+  liters: number;
+  cost: number;
+  fullTank: boolean;
+  station?: string;
+}
+
+export function validateFuel(input: unknown): Validation<FuelInput> {
+  const body = asRecord(input);
+  const errors: string[] = [];
+
+  const vehicleId = str(body['vehicleId'], 64);
+  const date = isoDate(body['date']);
+  const mileage = num(body['mileage'], 0, 3_000_000);
+  const liters = num(body['liters'], 0.1, 500);
+  const cost = num(body['cost'], 0, 10_000);
+
+  if (!vehicleId) errors.push('Vehicle is required');
+  if (!date) errors.push('Invalid date');
+  if (mileage === null) errors.push('Mileage must be a positive number');
+  if (liters === null) errors.push('Litres must be between 0.1 and 500');
+  if (cost === null) errors.push('Cost must be a positive number');
+
+  if (errors.length) return { ok: false, errors };
+
+  return {
+    ok: true,
+    value: {
+      vehicleId: vehicleId as string,
+      date: date as string,
+      mileage: mileage as number,
+      liters: liters as number,
+      cost: cost as number,
+      fullTank: body['fullTank'] !== false,
+      station: str(body['station'], 80) ?? undefined,
+    },
+  };
+}
+
+export interface WorkshopInput {
+  name: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+}
+
+export function validateWorkshop(input: unknown): Validation<WorkshopInput> {
+  const body = asRecord(input);
+  const name = str(body['name'], 80);
+  const phone = body['phone'] === undefined || body['phone'] === '' ? null : str(body['phone'], 30);
+
+  const errors: string[] = [];
+  if (!name) errors.push('Name is required');
+  if (phone && !/^[+0-9 ()-]{3,30}$/.test(phone)) errors.push('Invalid phone number');
+  if (errors.length) return { ok: false, errors };
+
+  return {
+    ok: true,
+    value: {
+      name: name as string,
+      phone: phone ?? undefined,
+      address: str(body['address'], 160) ?? undefined,
+      notes: str(body['notes'], 500) ?? undefined,
     },
   };
 }

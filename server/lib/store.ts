@@ -1,9 +1,14 @@
 import type {
   GarageSnapshot,
+  MemberRole,
+  SharedInfo,
+  StoredDocument,
+  StoredFuel,
   StoredPlan,
   StoredRecord,
   StoredUser,
   StoredVehicle,
+  StoredWorkshop,
 } from './types.ts';
 
 let pool: import('pg').Pool | null = null;
@@ -106,7 +111,46 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
       cost_usd NUMERIC(10, 5) NOT NULL DEFAULT 0
     );
 
+    -- Seguro, ITV y demás papeles de cada coche.
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fuel_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    -- Talleres de confianza: son de la persona, no de un coche.
+    CREATE TABLE IF NOT EXISTS workshops (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      data JSONB NOT NULL
+    );
+
+    -- Con quién comparte cada coche su dueño. El dueño no tiene fila: es el
+    -- user_id del coche. Todo lo del coche (registros, tareas, repostajes…)
+    -- se guarda con el user_id del dueño, aunque lo apunte otro: así, si
+    -- alguien deja de compartirlo o borra su cuenta, el historial sigue ahí.
+    CREATE TABLE IF NOT EXISTS vehicle_members (
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (vehicle_id, user_id)
+    );
+
     CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
+    CREATE INDEX IF NOT EXISTS vehicle_members_user ON vehicle_members (user_id);
+    CREATE INDEX IF NOT EXISTS records_vehicle ON records (vehicle_id);
+    CREATE INDEX IF NOT EXISTS plans_vehicle ON plans (vehicle_id);
+    CREATE INDEX IF NOT EXISTS documents_vehicle ON documents (vehicle_id);
+    CREATE INDEX IF NOT EXISTS fuel_logs_vehicle ON fuel_logs (vehicle_id);
+    CREATE INDEX IF NOT EXISTS workshops_user ON workshops (user_id);
     CREATE INDEX IF NOT EXISTS vehicles_user ON vehicles (user_id);
     CREATE INDEX IF NOT EXISTS records_user ON records (user_id);
     CREATE INDEX IF NOT EXISTS plans_user ON plans (user_id);
@@ -155,7 +199,8 @@ export type UsageService =
   | 'illustration-cache'
   | 'gemini-plan'
   | 'plan-cache'
-  | 'api-ninjas';
+  | 'api-ninjas'
+  | 'gemini-scan';
 export type UsageOutcome = 'ok' | 'error';
 
 export interface UsageEvent {
@@ -342,22 +387,139 @@ export async function closePool(): Promise<void> {
   }
 }
 
-export type Table = 'vehicles' | 'records' | 'plans';
+export type Table = 'vehicles' | 'records' | 'plans' | 'documents' | 'fuel_logs' | 'workshops';
 
+/** Lo que cuelga de un coche: se ve y se edita con acceso al coche. */
+export type VehicleTable = 'records' | 'plans' | 'documents' | 'fuel_logs';
+
+/**
+ * El garaje de alguien: sus coches y los que le han compartido, con todo lo
+ * de cada uno, y sus talleres.
+ */
 export async function loadSnapshot(userId: string): Promise<GarageSnapshot> {
   const p = await getPool();
 
-  const [vehicles, records, plans] = await Promise.all([
-    p.query('SELECT data FROM vehicles WHERE user_id = $1', [userId]),
-    p.query('SELECT data FROM records WHERE user_id = $1', [userId]),
-    p.query('SELECT data FROM plans WHERE user_id = $1', [userId]),
+  const vehicles = await p.query(
+    `SELECT v.data, v.user_id, o.name AS owner_name, o.email AS owner_email
+     FROM vehicles v JOIN users o ON o.id = v.user_id
+     WHERE v.user_id = $1
+        OR v.id IN (SELECT vehicle_id FROM vehicle_members WHERE user_id = $1)`,
+    [userId]
+  );
+  const ids = vehicles.rows.map((r) => (r['data'] as StoredVehicle).id);
+
+  const children = (table: VehicleTable) =>
+    p.query(`SELECT data FROM ${table} WHERE vehicle_id = ANY($1::text[])`, [ids]);
+
+  const [records, plans, documents, fuel, workshops] = await Promise.all([
+    children('records'),
+    children('plans'),
+    children('documents'),
+    children('fuel_logs'),
+    p.query('SELECT data FROM workshops WHERE user_id = $1', [userId]),
   ]);
 
   return {
-    vehicles: vehicles.rows.map((r) => r['data'] as StoredVehicle),
+    vehicles: vehicles.rows.map((r) => {
+      const vehicle = r['data'] as StoredVehicle;
+      if (r['user_id'] === userId) return vehicle;
+      const sharedBy: SharedInfo = { ownerName: r['owner_name'], ownerEmail: r['owner_email'] };
+      return { ...vehicle, sharedBy };
+    }),
     records: records.rows.map((r) => r['data'] as StoredRecord),
     plans: plans.rows.map((r) => r['data'] as StoredPlan),
+    documents: documents.rows.map((r) => r['data'] as StoredDocument),
+    fuel: fuel.rows.map((r) => r['data'] as StoredFuel),
+    workshops: workshops.rows.map((r) => r['data'] as StoredWorkshop),
   };
+}
+
+/** El coche, si esa persona es su dueña o se lo han compartido; null si no. */
+export async function accessVehicle(
+  userId: string,
+  vehicleId: string
+): Promise<{ vehicle: StoredVehicle; role: MemberRole } | null> {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT v.data, v.user_id FROM vehicles v
+     WHERE v.id = $1
+       AND (v.user_id = $2
+            OR EXISTS (SELECT 1 FROM vehicle_members m WHERE m.vehicle_id = v.id AND m.user_id = $2))`,
+    [vehicleId, userId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return { vehicle: row['data'] as StoredVehicle, role: row['user_id'] === userId ? 'owner' : 'member' };
+}
+
+/**
+ * Un registro, una tarea, un documento o un repostaje, con acceso a su
+ * coche: lo ve quien ve el coche, sea quien sea quien lo apuntó.
+ */
+export async function findChild<T extends { vehicleId: string }>(
+  table: VehicleTable,
+  userId: string,
+  id: string
+): Promise<{ item: T; vehicle: StoredVehicle; role: MemberRole } | null> {
+  const p = await getPool();
+  const result = await p.query(`SELECT data FROM ${table} WHERE id = $1`, [id]);
+  const item = result.rows[0]?.['data'] as T | undefined;
+  if (!item) return null;
+  const access = await accessVehicle(userId, item.vehicleId);
+  return access ? { item, ...access } : null;
+}
+
+export async function removeById(table: Table, id: string): Promise<boolean> {
+  const p = await getPool();
+  const result = await p.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+/* --- Coches compartidos ---------------------------------------------------- */
+
+export interface Member {
+  userId: string;
+  name: string;
+  email: string;
+  role: MemberRole;
+}
+
+/** El dueño primero y luego, por orden de llegada, con quien lo comparte. */
+export async function listMembers(vehicle: StoredVehicle): Promise<Member[]> {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT u.id, u.name, u.email, 'owner' AS role, 0 AS ord, NULL::timestamptz AS since
+     FROM users u WHERE u.id = $1
+     UNION ALL
+     SELECT u.id, u.name, u.email, 'member', 1, m.created_at
+     FROM vehicle_members m JOIN users u ON u.id = m.user_id
+     WHERE m.vehicle_id = $2
+     ORDER BY ord, since`,
+    [vehicle.userId, vehicle.id]
+  );
+  return result.rows.map((r) => ({
+    userId: r['id'],
+    name: r['name'],
+    email: r['email'],
+    role: r['role'],
+  }));
+}
+
+export async function addMember(vehicleId: string, userId: string): Promise<void> {
+  const p = await getPool();
+  await p.query(
+    `INSERT INTO vehicle_members (vehicle_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [vehicleId, userId]
+  );
+}
+
+export async function removeMember(vehicleId: string, userId: string): Promise<boolean> {
+  const p = await getPool();
+  const result = await p.query(
+    'DELETE FROM vehicle_members WHERE vehicle_id = $1 AND user_id = $2',
+    [vehicleId, userId]
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function findById<T>(
@@ -382,9 +544,9 @@ export async function upsert(
 ): Promise<void> {
   const p = await getPool();
 
-  if (table === 'vehicles') {
+  if (table === 'vehicles' || table === 'workshops') {
     await p.query(
-      `INSERT INTO vehicles (id, user_id, data) VALUES ($1, $2, $3)
+      `INSERT INTO ${table} (id, user_id, data) VALUES ($1, $2, $3)
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`,
       [id, userId, JSON.stringify(data)]
     );
