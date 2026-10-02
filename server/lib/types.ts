@@ -38,6 +38,8 @@ export interface StoredVehicle {
   /** Ver ILLUSTRATION_VERSION en car-illustration.ts. */
   illustrationVersion?: number;
   notes?: string;
+  /** No aparece en su perfil público (ver social.ts). */
+  socialHidden?: boolean;
   createdAt: string;
 }
 

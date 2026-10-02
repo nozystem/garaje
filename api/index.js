@@ -249,6 +249,43 @@ async function ensureSchema(p) {
       PRIMARY KEY (vehicle_id, user_id)
     );
 
+    -- Perfil p\xFAblico de cada cuenta (ver social.ts): su @usuario y si se
+    -- oculta. Todas las cuentas tienen uno.
+    CREATE TABLE IF NOT EXISTS profiles (
+      user_id TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+      username TEXT NOT NULL,
+      hidden BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_key ON profiles (lower(username));
+
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      followee_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (follower_id, followee_id)
+    );
+    CREATE INDEX IF NOT EXISTS follows_followee ON follows (followee_id);
+
+    CREATE TABLE IF NOT EXISTS likes (
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, vehicle_id)
+    );
+    CREATE INDEX IF NOT EXISTS likes_vehicle ON likes (vehicle_id);
+
+    -- Las cuentas sin perfil reciben uno con un @usuario sacado de su nombre
+    -- (sin tildes ni s\xEDmbolos) y el principio de su id, que lo hace \xFAnico.
+    INSERT INTO profiles (user_id, username)
+    SELECT u.id,
+           coalesce(nullif(left(regexp_replace(translate(lower(u.name), '\xE1\xE9\xED\xF3\xFA\xFC\xF1\xE0\xE8\xEC\xF2\xF9\xE7', 'aeiouunaeiouc'),
+                                               '[^a-z0-9]', '', 'g'), 14), ''), 'garaje')
+             || left(replace(u.id, '-', ''), 4)
+    FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM profiles pr WHERE pr.user_id = u.id)
+    ON CONFLICT DO NOTHING;
+
     CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
     CREATE INDEX IF NOT EXISTS vehicle_members_user ON vehicle_members (user_id);
     CREATE INDEX IF NOT EXISTS records_vehicle ON records (vehicle_id);
@@ -536,6 +573,191 @@ async function removeVehicleCascade(userId, vehicleId) {
   return remove("vehicles", userId, vehicleId);
 }
 
+// server/lib/social.ts
+var USERNAME = /^[a-z0-9_.]{3,20}$/;
+function suggestUsername(name, id) {
+  const base = name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14);
+  return `${base || "garaje"}${id.replace(/-/g, "").slice(0, 4)}`;
+}
+async function ensureProfile(userId) {
+  const p = await getPool();
+  const found = await p.query("SELECT user_id, username, hidden FROM profiles WHERE user_id = $1", [userId]);
+  if (found.rows[0]) return toProfile(found.rows[0]);
+  const user = await p.query("SELECT name FROM users WHERE id = $1", [userId]);
+  const username = suggestUsername(user.rows[0]?.["name"] ?? "", userId);
+  await p.query(
+    `INSERT INTO profiles (user_id, username) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+    [userId, username]
+  );
+  return ensureProfile(userId);
+}
+async function updateProfile(userId, changes) {
+  const current = await ensureProfile(userId);
+  const p = await getPool();
+  try {
+    await p.query("UPDATE profiles SET username = $2, hidden = $3 WHERE user_id = $1", [
+      userId,
+      changes.username ?? current.username,
+      changes.hidden ?? current.hidden
+    ]);
+  } catch (error) {
+    if (error.code === "23505") throw new Error("taken");
+    throw error;
+  }
+  return ensureProfile(userId);
+}
+var VISIBLE = `
+  FROM vehicles v
+  JOIN profiles pr ON pr.user_id = v.user_id
+  WHERE NOT pr.hidden AND coalesce((v.data->>'socialHidden')::boolean, false) = false`;
+function publicColumns(viewer) {
+  return `v.data, pr.username,
+    (SELECT count(*) FROM likes l WHERE l.vehicle_id = v.id)::int AS likes,
+    EXISTS (SELECT 1 FROM likes l WHERE l.vehicle_id = v.id AND l.user_id = ${viewer}) AS liked`;
+}
+function toPublic(row) {
+  const v = row["data"];
+  const imageKind = v.photo ? "photo" : v.illustration ? "illustration" : null;
+  const version = encodeURIComponent((v.photo ? String(v.photo.length) : v.illustrationAt) ?? "0");
+  return {
+    id: v.id,
+    make: v.make,
+    model: v.model,
+    year: v.year,
+    color: v.color,
+    image: imageKind ? `/api/social/vehicles/${v.id}/image?v=${version}` : null,
+    imageKind,
+    illustrationVersion: v.illustrationVersion,
+    owner: { username: row["username"] },
+    likes: row["likes"],
+    likedByMe: row["liked"],
+    createdAt: v.createdAt
+  };
+}
+async function profileByUsername(viewer, username) {
+  await ensureProfile(viewer);
+  const p = await getPool();
+  const found = await p.query(
+    "SELECT user_id, username, hidden FROM profiles WHERE lower(username) = lower($1)",
+    [username]
+  );
+  const row = found.rows[0];
+  if (!row) return null;
+  const profile = toProfile(row);
+  const isMe = profile.userId === viewer;
+  if (profile.hidden && !isMe) return null;
+  const vehicles = await p.query(
+    `SELECT ${publicColumns("$2")}
+     FROM vehicles v JOIN profiles pr ON pr.user_id = v.user_id
+     WHERE v.user_id = $1 ${isMe ? "" : "AND coalesce((v.data->>'socialHidden')::boolean, false) = false"}
+     ORDER BY v.data->>'createdAt' DESC`,
+    [profile.userId, viewer]
+  );
+  const counts = await p.query(
+    `SELECT
+       (SELECT count(*) FROM follows WHERE followee_id = $1)::int AS followers,
+       (SELECT count(*) FROM follows WHERE follower_id = $1)::int AS following,
+       EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND followee_id = $1) AS is_following`,
+    [profile.userId, viewer]
+  );
+  return {
+    username: profile.username,
+    vehicles: vehicles.rows.map(toPublic),
+    followers: counts.rows[0]["followers"],
+    following: counts.rows[0]["following"],
+    isFollowing: counts.rows[0]["is_following"],
+    isMe,
+    hidden: profile.hidden
+  };
+}
+async function setFollow(viewer, username, follow) {
+  const p = await getPool();
+  const found = await p.query(
+    "SELECT user_id, hidden FROM profiles WHERE lower(username) = lower($1)",
+    [username]
+  );
+  const target = found.rows[0];
+  if (!target || target["user_id"] === viewer || follow && target["hidden"]) return false;
+  if (follow) {
+    await p.query(
+      "INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      [viewer, target["user_id"]]
+    );
+  } else {
+    await p.query("DELETE FROM follows WHERE follower_id = $1 AND followee_id = $2", [viewer, target["user_id"]]);
+  }
+  return true;
+}
+async function searchProfiles(viewer, query) {
+  await ensureProfile(viewer);
+  const p = await getPool();
+  const pattern = `%${query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const result = await p.query(
+    `SELECT pr.username,
+       (SELECT count(*) FROM vehicles v WHERE v.user_id = pr.user_id
+          AND coalesce((v.data->>'socialHidden')::boolean, false) = false)::int AS vehicles,
+       EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followee_id = pr.user_id) AS is_following
+     FROM profiles pr
+     WHERE NOT pr.hidden AND pr.user_id <> $1 AND lower(pr.username) LIKE $2
+     ORDER BY length(pr.username), pr.username
+     LIMIT 30`,
+    [viewer, pattern]
+  );
+  return result.rows.map((r) => ({
+    username: r["username"],
+    vehicles: r["vehicles"],
+    isFollowing: r["is_following"]
+  }));
+}
+async function explore(viewer, make) {
+  await ensureProfile(viewer);
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT ${publicColumns("$2")} ${VISIBLE}
+       AND ($1::text IS NULL OR lower(v.data->>'make') = lower($1))
+     ORDER BY v.data->>'createdAt' DESC LIMIT 60`,
+    [make || null, viewer]
+  );
+  return result.rows.map(toPublic);
+}
+async function popularMakes() {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT v.data->>'make' AS make, count(*)::int AS count ${VISIBLE}
+     GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15`
+  );
+  return result.rows;
+}
+async function feed(viewer) {
+  const p = await getPool();
+  const result = await p.query(
+    `SELECT ${publicColumns("$1")} ${VISIBLE}
+       AND v.user_id IN (SELECT followee_id FROM follows WHERE follower_id = $1)
+     ORDER BY v.data->>'createdAt' DESC LIMIT 60`,
+    [viewer]
+  );
+  return result.rows.map(toPublic);
+}
+async function visibleVehicle(vehicleId) {
+  const p = await getPool();
+  const result = await p.query(`SELECT v.data ${VISIBLE} AND v.id = $1`, [vehicleId]);
+  return result.rows[0]?.["data"] ?? null;
+}
+async function setLike(viewer, vehicleId, like) {
+  if (like && !await visibleVehicle(vehicleId)) return null;
+  const p = await getPool();
+  if (like) {
+    await p.query("INSERT INTO likes (user_id, vehicle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [viewer, vehicleId]);
+  } else {
+    await p.query("DELETE FROM likes WHERE user_id = $1 AND vehicle_id = $2", [viewer, vehicleId]);
+  }
+  const count = await p.query("SELECT count(*)::int AS n FROM likes WHERE vehicle_id = $1", [vehicleId]);
+  return { likes: count.rows[0]["n"] };
+}
+function toProfile(row) {
+  return { userId: row["user_id"], username: row["username"], hidden: row["hidden"] };
+}
+
 // server/lib/auth.ts
 var COOKIE = "garaje_session";
 function sessionCookie(token, maxAge) {
@@ -566,7 +788,7 @@ function isAdmin(email) {
   const admins = (process.env["ADMIN_EMAILS"] ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   return admins.includes(email.trim().toLowerCase());
 }
-function toPublic(user) {
+function toPublic2(user) {
   return {
     id: user.id,
     email: user.email,
@@ -623,8 +845,9 @@ async function handleRegister(req, res) {
   } catch {
     return json(res, 409, { error: "An account with that email already exists" });
   }
+  await ensureProfile(user.id);
   res.setHeader("Set-Cookie", sessionCookie(issueToken(user.id), TOKEN_MAX_AGE_SECONDS));
-  json(res, 201, { user: toPublic(user) });
+  json(res, 201, { user: toPublic2(user) });
 }
 async function handleLogin(req, res) {
   let body;
@@ -645,7 +868,7 @@ async function handleLogin(req, res) {
     return invalid();
   }
   res.setHeader("Set-Cookie", sessionCookie(issueToken(user.id), TOKEN_MAX_AGE_SECONDS));
-  json(res, 200, { user: toPublic(user) });
+  json(res, 200, { user: toPublic2(user) });
 }
 function handleLogout(res) {
   res.setHeader("Set-Cookie", sessionCookie("", 0));
@@ -659,7 +882,7 @@ async function handleMe(req, res) {
     res.setHeader("Set-Cookie", sessionCookie("", 0));
     return json(res, 401, { error: "This account no longer exists" });
   }
-  json(res, 200, { user: toPublic(user) });
+  json(res, 200, { user: toPublic2(user) });
 }
 
 // server/lib/car-facets.ts
@@ -1532,6 +1755,8 @@ async function handleRequest(req, res) {
       return handleFuel(res, method, userId, id, body);
     case "workshops":
       return handleWorkshops(res, method, userId, id, body);
+    case "social":
+      return handleSocial(res, method, userId, segments.slice(1), url.searchParams, body);
     default:
       notFound(res);
   }
@@ -1918,6 +2143,93 @@ async function handleWorkshops(res, method, userId, id, body) {
     return;
   }
   methodNotAllowed(res, ["PUT", "DELETE"]);
+}
+async function handleSocial(res, method, userId, [section, id, action], params, body) {
+  const data = body ?? {};
+  switch (section) {
+    case "me": {
+      if (method === "GET") {
+        const { username: username2, hidden: hidden2 } = await ensureProfile(userId);
+        json(res, 200, { profile: { username: username2, hidden: hidden2 } });
+        return;
+      }
+      if (method !== "PUT") return methodNotAllowed(res, ["GET", "PUT"]);
+      const username = typeof data["username"] === "string" ? data["username"].trim().toLowerCase() : void 0;
+      if (username !== void 0 && !USERNAME.test(username)) {
+        return badRequest(res, ["Usernames have 3 to 20 letters, numbers, dots or underscores"]);
+      }
+      const hidden = typeof data["hidden"] === "boolean" ? data["hidden"] : void 0;
+      try {
+        const profile = await updateProfile(userId, { username, hidden });
+        json(res, 200, { profile: { username: profile.username, hidden: profile.hidden } });
+      } catch (error) {
+        if (error.message !== "taken") throw error;
+        json(res, 409, { error: "That username is taken" });
+      }
+      return;
+    }
+    case "vehicles": {
+      if (!id) return notFound(res);
+      if (action === "image") {
+        if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+        const vehicle = await visibleVehicle(id) ?? (await accessVehicle(userId, id))?.vehicle;
+        if (!vehicle) return notFound(res);
+        return sendDataUrl(res, vehicle.photo ?? vehicle.illustration);
+      }
+      if (action === "like") {
+        if (method !== "POST" && method !== "DELETE") return methodNotAllowed(res, ["POST", "DELETE"]);
+        const result = await setLike(userId, id, method === "POST");
+        if (!result) return notFound(res);
+        json(res, 200, result);
+        return;
+      }
+      if (action) return notFound(res);
+      if (method !== "PUT") return methodNotAllowed(res, ["PUT"]);
+      const access = await accessVehicle(userId, id);
+      if (!access) return notFound(res);
+      if (access.role !== "owner") {
+        json(res, 403, { error: "Only the owner can do that" });
+        return;
+      }
+      const updated = { ...access.vehicle, socialHidden: data["hidden"] === true };
+      await upsert("vehicles", userId, id, updated);
+      json(res, 200, forClient(updated));
+      return;
+    }
+    case "profiles": {
+      if (!id) return notFound(res);
+      if (action === "follow") {
+        if (method !== "POST" && method !== "DELETE") return methodNotAllowed(res, ["POST", "DELETE"]);
+        if (!await setFollow(userId, id, method === "POST")) return notFound(res);
+      } else if (action) {
+        return notFound(res);
+      } else if (method !== "GET") {
+        return methodNotAllowed(res, ["GET"]);
+      }
+      const profile = await profileByUsername(userId, id);
+      if (!profile) return notFound(res);
+      json(res, 200, { profile });
+      return;
+    }
+    case "search":
+      if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+      json(res, 200, { profiles: await searchProfiles(userId, (params.get("q") ?? "").trim().slice(0, 40)) });
+      return;
+    case "explore":
+      if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+      json(res, 200, { vehicles: await explore(userId, params.get("make")?.trim() || void 0) });
+      return;
+    case "feed":
+      if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+      json(res, 200, { vehicles: await feed(userId) });
+      return;
+    case "makes":
+      if (method !== "GET") return methodNotAllowed(res, ["GET"]);
+      json(res, 200, { makes: await popularMakes() });
+      return;
+    default:
+      notFound(res);
+  }
 }
 function withPhotoLink(item, kind) {
   if (!item.photo) return item;

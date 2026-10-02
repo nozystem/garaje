@@ -144,6 +144,43 @@ async function ensureSchema(p: import('pg').Pool): Promise<void> {
       PRIMARY KEY (vehicle_id, user_id)
     );
 
+    -- Perfil público de cada cuenta (ver social.ts): su @usuario y si se
+    -- oculta. Todas las cuentas tienen uno.
+    CREATE TABLE IF NOT EXISTS profiles (
+      user_id TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+      username TEXT NOT NULL,
+      hidden BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_key ON profiles (lower(username));
+
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      followee_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (follower_id, followee_id)
+    );
+    CREATE INDEX IF NOT EXISTS follows_followee ON follows (followee_id);
+
+    CREATE TABLE IF NOT EXISTS likes (
+      user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, vehicle_id)
+    );
+    CREATE INDEX IF NOT EXISTS likes_vehicle ON likes (vehicle_id);
+
+    -- Las cuentas sin perfil reciben uno con un @usuario sacado de su nombre
+    -- (sin tildes ni símbolos) y el principio de su id, que lo hace único.
+    INSERT INTO profiles (user_id, username)
+    SELECT u.id,
+           coalesce(nullif(left(regexp_replace(translate(lower(u.name), 'áéíóúüñàèìòùç', 'aeiouunaeiouc'),
+                                               '[^a-z0-9]', '', 'g'), 14), ''), 'garaje')
+             || left(replace(u.id, '-', ''), 4)
+    FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM profiles pr WHERE pr.user_id = u.id)
+    ON CONFLICT DO NOTHING;
+
     CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events (at);
     CREATE INDEX IF NOT EXISTS vehicle_members_user ON vehicle_members (user_id);
     CREATE INDEX IF NOT EXISTS records_vehicle ON records (vehicle_id);

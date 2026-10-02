@@ -775,3 +775,115 @@ describe('records with receipts', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('social', () => {
+  async function person(email: string, name = 'Ana') {
+    const c = client();
+    await c.fetch('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'a-long-enough-password', name }),
+    });
+    const { profile } = await (await c.fetch('/api/social/me')).json();
+    return { c, username: profile.username as string };
+  }
+
+  it('gives every account a username taken from its name', async () => {
+    const { username } = await person('ana@example.com', 'Ana Pérez');
+    expect(username).toMatch(/^anaperez[0-9a-f]{4}$/);
+  });
+
+  it('lets you pick a username, but not one that is taken or malformed', async () => {
+    const a = await person('a@example.com');
+    const b = await person('b@example.com');
+
+    const ok = await a.c.fetch('/api/social/me', { method: 'PUT', body: JSON.stringify({ username: 'El_Garaje' }) });
+    expect((await ok.json()).profile.username).toBe('el_garaje');
+
+    const taken = await b.c.fetch('/api/social/me', { method: 'PUT', body: JSON.stringify({ username: 'el_garaje' }) });
+    expect(taken.status).toBe(409);
+    const bad = await b.c.fetch('/api/social/me', { method: 'PUT', body: JSON.stringify({ username: 'a b' }) });
+    expect(bad.status).toBe(400);
+  });
+
+  it('shows the make, model, year and image of a vehicle, and nothing private', async () => {
+    const owner = await person('owner@example.com');
+    const viewer = await person('viewer@example.com');
+    await owner.c.fetch('/api/vehicles', {
+      method: 'POST',
+      body: JSON.stringify({ ...CAR, plate: '1234 ABC', notes: 'secret', photo: PHOTO }),
+    });
+
+    const res = await viewer.c.fetch(`/api/social/profiles/${owner.username}`);
+    const { profile } = await res.json();
+    expect(profile.vehicles).toHaveLength(1);
+    const car = profile.vehicles[0];
+    expect(car).toMatchObject({ make: 'SEAT', model: 'León', year: 2018, imageKind: 'photo', likes: 0 });
+    const text = JSON.stringify(profile);
+    for (const secret of ['1234 ABC', 'secret', '100000', 'owner@example.com', 'The car', 'Ana']) {
+      expect(text).not.toContain(secret);
+    }
+
+    const image = await viewer.c.fetch(car.image);
+    expect(image.status).toBe(200);
+  });
+
+  it('follows people, shows their vehicles in the feed and counts likes', async () => {
+    const owner = await person('owner@example.com');
+    const viewer = await person('viewer@example.com');
+    await owner.c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify(CAR) });
+
+    expect((await (await viewer.c.fetch('/api/social/feed')).json()).vehicles).toHaveLength(0);
+    const followed = await viewer.c.fetch(`/api/social/profiles/${owner.username}/follow`, { method: 'POST' });
+    expect((await followed.json()).profile).toMatchObject({ isFollowing: true, followers: 1 });
+
+    const { vehicles } = await (await viewer.c.fetch('/api/social/feed')).json();
+    expect(vehicles).toHaveLength(1);
+
+    const liked = await viewer.c.fetch(`/api/social/vehicles/${vehicles[0].id}/like`, { method: 'POST' });
+    expect(await liked.json()).toEqual({ likes: 1 });
+    const again = await (await viewer.c.fetch('/api/social/explore?make=seat')).json();
+    expect(again.vehicles[0]).toMatchObject({ likes: 1, likedByMe: true });
+  });
+
+  it('finds people by username', async () => {
+    const owner = await person('owner@example.com', 'Marta');
+    const viewer = await person('viewer@example.com');
+    const { profiles } = await (await viewer.c.fetch('/api/social/search?q=mart')).json();
+    expect(profiles.map((p: { username: string }) => p.username)).toEqual([owner.username]);
+  });
+
+  it('a hidden profile disappears from everywhere, and so does a hidden vehicle', async () => {
+    const owner = await person('owner@example.com', 'Marta');
+    const viewer = await person('viewer@example.com');
+    const car = await withCar(owner.c);
+    await owner.c.fetch('/api/vehicles', { method: 'POST', body: JSON.stringify({ ...CAR, model: 'Ibiza' }) });
+
+    // Un coche oculto no sale, el otro sí.
+    await owner.c.fetch(`/api/social/vehicles/${car.id}`, { method: 'PUT', body: JSON.stringify({ hidden: true }) });
+    const explored = await (await viewer.c.fetch('/api/social/explore')).json();
+    expect(explored.vehicles.map((v: { model: string }) => v.model)).toEqual(['Ibiza']);
+    expect((await viewer.c.fetch(`/api/social/vehicles/${car.id}/like`, { method: 'POST' })).status).toBe(404);
+    // Su dueño lo sigue viendo en su perfil.
+    const own = await (await owner.c.fetch(`/api/social/profiles/${owner.username}`)).json();
+    expect(own.profile.vehicles).toHaveLength(2);
+
+    // Un perfil oculto no sale en ningún sitio.
+    await owner.c.fetch('/api/social/me', { method: 'PUT', body: JSON.stringify({ hidden: true }) });
+    expect((await viewer.c.fetch(`/api/social/profiles/${owner.username}`)).status).toBe(404);
+    expect((await (await viewer.c.fetch('/api/social/explore')).json()).vehicles).toHaveLength(0);
+    expect((await (await viewer.c.fetch('/api/social/search?q=mart')).json()).profiles).toHaveLength(0);
+    expect((await viewer.c.fetch(`/api/social/profiles/${owner.username}/follow`, { method: 'POST' })).status).toBe(404);
+  });
+
+  it('only the owner hides a vehicle', async () => {
+    const owner = await person('owner@example.com');
+    const guest = await person('guest@example.com');
+    const car = await withCar(owner.c);
+    await owner.c.fetch(`/api/vehicles/${car.id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'guest@example.com' }),
+    });
+    const res = await guest.c.fetch(`/api/social/vehicles/${car.id}`, { method: 'PUT', body: JSON.stringify({ hidden: true }) });
+    expect(res.status).toBe(403);
+  });
+});

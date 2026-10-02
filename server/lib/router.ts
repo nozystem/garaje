@@ -40,6 +40,19 @@ import {
 } from './maintenance-plan.ts';
 import { isConfigured as isScanConfigured, scanReceipt } from './receipt-scan.ts';
 import {
+  USERNAME,
+  ensureProfile,
+  explore,
+  feed,
+  popularMakes,
+  profileByUsername,
+  searchProfiles,
+  setFollow,
+  setLike,
+  updateProfile,
+  visibleVehicle,
+} from './social.ts';
+import {
   accessVehicle,
   addMember,
   deleteUser,
@@ -281,6 +294,9 @@ export async function handleRequest(
 
     case 'workshops':
       return handleWorkshops(res, method, userId, id, body);
+
+    case 'social':
+      return handleSocial(res, method, userId, segments.slice(1), url.searchParams, body);
 
     default:
       notFound(res);
@@ -831,6 +847,123 @@ async function handleWorkshops(
   }
 
   methodNotAllowed(res, ['PUT', 'DELETE']);
+}
+
+/**
+ * La parte social (ver social.ts):
+ *   GET/PUT  /api/social/me                       tu perfil: @usuario y si se oculta
+ *   PUT      /api/social/vehicles/:id             mostrar u ocultar un coche tuyo
+ *   GET      /api/social/vehicles/:id/image       la foto o ilustración de un coche visible
+ *   POST/DELETE /api/social/vehicles/:id/like
+ *   GET      /api/social/profiles/:username
+ *   POST/DELETE /api/social/profiles/:username/follow
+ *   GET      /api/social/search?q=   /explore?make=   /feed   /makes
+ */
+async function handleSocial(
+  res: ServerResponse,
+  method: string,
+  userId: string,
+  [section, id, action]: string[],
+  params: URLSearchParams,
+  body: unknown
+): Promise<void> {
+  const data = (body ?? {}) as Record<string, unknown>;
+
+  switch (section) {
+    case 'me': {
+      if (method === 'GET') {
+        const { username, hidden } = await ensureProfile(userId);
+        json(res, 200, { profile: { username, hidden } });
+        return;
+      }
+      if (method !== 'PUT') return methodNotAllowed(res, ['GET', 'PUT']);
+
+      const username = typeof data['username'] === 'string' ? data['username'].trim().toLowerCase() : undefined;
+      if (username !== undefined && !USERNAME.test(username)) {
+        return badRequest(res, ['Usernames have 3 to 20 letters, numbers, dots or underscores']);
+      }
+      const hidden = typeof data['hidden'] === 'boolean' ? data['hidden'] : undefined;
+      try {
+        const profile = await updateProfile(userId, { username, hidden });
+        json(res, 200, { profile: { username: profile.username, hidden: profile.hidden } });
+      } catch (error) {
+        if ((error as Error).message !== 'taken') throw error;
+        json(res, 409, { error: 'That username is taken' });
+      }
+      return;
+    }
+
+    case 'vehicles': {
+      if (!id) return notFound(res);
+
+      if (action === 'image') {
+        if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+        const vehicle = (await visibleVehicle(id)) ?? (await accessVehicle(userId, id))?.vehicle;
+        if (!vehicle) return notFound(res);
+        return sendDataUrl(res, vehicle.photo ?? vehicle.illustration);
+      }
+
+      if (action === 'like') {
+        if (method !== 'POST' && method !== 'DELETE') return methodNotAllowed(res, ['POST', 'DELETE']);
+        const result = await setLike(userId, id, method === 'POST');
+        if (!result) return notFound(res);
+        json(res, 200, result);
+        return;
+      }
+      if (action) return notFound(res);
+
+      if (method !== 'PUT') return methodNotAllowed(res, ['PUT']);
+      const access = await accessVehicle(userId, id);
+      if (!access) return notFound(res);
+      if (access.role !== 'owner') {
+        json(res, 403, { error: 'Only the owner can do that' });
+        return;
+      }
+      const updated: StoredVehicle = { ...access.vehicle, socialHidden: data['hidden'] === true };
+      await upsert('vehicles', userId, id, updated);
+      json(res, 200, forClient(updated));
+      return;
+    }
+
+    case 'profiles': {
+      if (!id) return notFound(res);
+      if (action === 'follow') {
+        if (method !== 'POST' && method !== 'DELETE') return methodNotAllowed(res, ['POST', 'DELETE']);
+        if (!(await setFollow(userId, id, method === 'POST'))) return notFound(res);
+      } else if (action) {
+        return notFound(res);
+      } else if (method !== 'GET') {
+        return methodNotAllowed(res, ['GET']);
+      }
+      const profile = await profileByUsername(userId, id);
+      if (!profile) return notFound(res);
+      json(res, 200, { profile });
+      return;
+    }
+
+    case 'search':
+      if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+      json(res, 200, { profiles: await searchProfiles(userId, (params.get('q') ?? '').trim().slice(0, 40)) });
+      return;
+
+    case 'explore':
+      if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+      json(res, 200, { vehicles: await explore(userId, params.get('make')?.trim() || undefined) });
+      return;
+
+    case 'feed':
+      if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+      json(res, 200, { vehicles: await feed(userId) });
+      return;
+
+    case 'makes':
+      if (method !== 'GET') return methodNotAllowed(res, ['GET']);
+      json(res, 200, { makes: await popularMakes() });
+      return;
+
+    default:
+      notFound(res);
+  }
 }
 
 /**

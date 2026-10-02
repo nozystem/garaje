@@ -10,6 +10,7 @@ import {
 } from './crypto.ts';
 import { badRequest, json, readJson } from './http.ts';
 import { createUser, findUserByEmail, findUserById } from './store.ts';
+import { ensureProfile } from './social.ts';
 import type { PublicUser, StoredUser } from './types.ts';
 
 const COOKIE = 'garaje_session';
@@ -138,6 +139,9 @@ export async function handleRegister(
   } catch {
     return json(res, 409, { error: 'An account with that email already exists' });
   }
+
+  // Su perfil público, con un @usuario de partida que podrá cambiar.
+  await ensureProfile(user.id);
 
   res.setHeader('Set-Cookie', sessionCookie(issueToken(user.id), TOKEN_MAX_AGE_SECONDS));
   json(res, 201, { user: toPublic(user) });
